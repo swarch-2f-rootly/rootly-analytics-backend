@@ -1,0 +1,31 @@
+name: Bidirectional Merge
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  merge-to-develop:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.PAT_TOKEN }}
+      
+      - name: Configure Git
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+      
+      - name: Merge main to develop
+        run: |
+          git checkout develop
+          git pull origin develop
+          git merge main --no-edit
+          git push origin develop
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
