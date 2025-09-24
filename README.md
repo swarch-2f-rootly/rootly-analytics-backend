@@ -2,7 +2,7 @@
 
 Este es el servicio de análisis avanzado para el sistema de monitoreo agrícola rootly. Proporciona métricas analíticas complejas basadas en datos de sensores para apoyar la toma de decisiones en agricultura.
 
-## 🌱 Características Principales
+## Características Principales
 
 - **Análisis Agrícola Avanzado**: Implementa métricas especializadas como GDD, VPD, WDI, DLI y Punto de Rocío
 - **Arquitectura Hexagonal**: Separación clara entre lógica de negocio e infraestructura
@@ -11,7 +11,7 @@ Este es el servicio de análisis avanzado para el sistema de monitoreo agrícola
 - **Integración HTTP**: Consume datos del servicio de Go backend
 - **Containerización**: Totalmente dockerizado para fácil despliegue
 
-## 🏗️ Arquitectura
+## Arquitectura
 
 El servicio sigue los principios de **Arquitectura Hexagonal (Ports and Adapters)**:
 
@@ -52,7 +52,7 @@ src/
   - `AVP = (RH / 100) * SVP`
   - `VPD = SVP - AVP`
 
-## 🚀 Endpoints de la API
+##  Endpoints de la API
 
 ### 1. Reporte de Métrica Individual
 ```
@@ -97,39 +97,20 @@ GET /api/v1/analytics/metrics
 ```
 Retorna la lista de métricas disponibles: `["temperatura", "humedad_aire", "humedad_tierra", "luminosidad"]`
 
-## 🛠️ Instalación y Ejecución
+##  Instalación y Ejecución
 
 ### Prerrequisitos
-- Python 3.11+
-- Docker (opcional)
-- Servicio de Go backend ejecutándose
+- Docker
 
 ### Desarrollo Local
 
-1. **Instalar dependencias:**
-```bash
-pip install -r requirements.txt
-```
-
-2. **Configurar variables de entorno:**
+1. **Configurar variables de entorno:**
 ```bash
 cp config.py .env
 # Editar .env con las configuraciones apropiadas
 ```
 
-3. **Ejecutar el servicio:**
-```bash
-uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-### Usando Docker
-
-1. **Construir la imagen:**
-```bash
-docker build -t rootly-analytics .
-```
-
-2. **Ejecutar con Docker Compose:**
+2. **Ejecutar con Docker Compose (en la carpeta rootly-deployment):**
 ```bash
 docker-compose up -d
 ```
@@ -140,7 +121,7 @@ El servicio estará disponible en:
 - **Documentación ReDoc**: http://localhost:8000/redoc
 - **Health Check**: http://localhost:8000/health
 
-## 🔧 Configuración
+## Configuración
 
 El servicio se configura mediante variables de entorno:
 
@@ -153,7 +134,7 @@ El servicio se configura mediante variables de entorno:
 | `CORS_ORIGINS` | Orígenes permitidos para CORS | `*` |
 | `LOG_LEVEL` | Nivel de logging | `INFO` |
 
-## 🧪 Pruebas
+## Pruebas
 
 ```bash
 # Ejecutar pruebas unitarias
@@ -162,17 +143,24 @@ pytest
 # Con cobertura
 pytest --cov=src
 
+# Ejecutar pruebas unitarias
+
+pytest tests/unit
+
 # Pruebas específicas
 pytest tests/test_analytics_calculations.py
+
+# Ejecutar pruebas de integracion ( con el servicio y dependencias encendidas)
+pytest -m integration
 ```
 
-## 📚 Documentación API
+## Documentación API
 
 Una vez ejecutado el servicio, la documentación interactiva está disponible en:
-- **Swagger UI**: http://localhost:8001/docs
-- **ReDoc**: http://localhost:8001/redoc
+- **Swagger UI**: http://localhost:8000/docs
+- **ReDoc**: http://localhost:8000/redoc
 
-## 🏥 Monitoreo y Salud
+## Monitoreo y Salud
 
 ### Health Check
 ```
@@ -195,7 +183,7 @@ El servicio implementa un sistema de logging estructurado siguiendo el patrón d
     - Cálculos de métricas analíticas
     - Errores y excepciones
 
-## 🔗 Integración con el Ecosistema rootly
+## Integración con el Ecosistema rootly
 
 Este servicio funciona como parte del ecosistema rootly:
 
@@ -214,7 +202,7 @@ Este servicio funciona como parte del ecosistema rootly:
    - Presenta visualizaciones de datos
    - Interfaz de usuario para agricultores
 
-## 🐛 Solución de Problemas
+## Solución de Problemas
 
 ### Error de Conexión a InfluxDB
 ```
@@ -233,15 +221,3 @@ InvalidMetricError: Metric 'xxx' is not supported
 InsufficientDataError: No data found
 ```
 **Solución**: Verificar que existen datos para el controlador y rango de tiempo especificado.
-
-## 🤝 Contribución
-
-1. Fork el repositorio
-2. Crear una rama feature (`git checkout -b feature/nueva-metrica`)
-3. Commit cambios (`git commit -am 'Add nueva métrica'`)
-4. Push a la rama (`git push origin feature/nueva-metrica`)
-5. Crear un Pull Request
-
-## 📄 Licencia
-
-Este proyecto es parte del curso de Arquitectura de Software - Universidad Nacional de Colombia.
