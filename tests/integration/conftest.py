@@ -20,10 +20,10 @@ def api_base(base_url):
 
 
 @pytest.fixture
-async def http_client(base_url):
+def http_client(base_url):
     """HTTP client for testing."""
-    async with httpx.AsyncClient(base_url=base_url, timeout=30.0) as client:
-        yield client
+    client = httpx.AsyncClient(base_url=base_url, timeout=30.0)
+    return client
 
 
 @pytest.fixture
