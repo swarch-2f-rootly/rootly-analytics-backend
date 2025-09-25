@@ -20,14 +20,16 @@ from ...core.domain.analytics import (
     MultiReportRequest,
     AnalyticsReport,
     MultiReportResponse,
-    TrendAnalysis
+    TrendAnalysis,
+    HistoricalQueryFilter
 )
 from ..models import (
     SingleMetricReportResponse,
     MultiReportRequestModel,
     MultiReportResponseModel,
     TrendAnalysisResponse,
-    ErrorResponse
+    ErrorResponse,
+    HistoricalQueryResponseModel
 )
 
 
@@ -127,6 +129,35 @@ class AnalyticsHandlers:
         )
         async def health_check():
             return {"status": "healthy", "service": "analytics", "timestamp": datetime.now()}
+
+        @self.router.get(
+            "/historical",
+            response_model=HistoricalQueryResponseModel,
+            responses={
+                400: {"model": ErrorResponse},
+                500: {"model": ErrorResponse}
+            },
+            summary="Historical Measurements",
+            description="Query historical measurement data using advanced filters"
+        )
+        async def historical_query(
+            start_time: Optional[str] = Query(None, description="Start time (ISO format)"),
+            end_time: Optional[str] = Query(None, description="End time (ISO format)"),
+            controller_id: Optional[str] = Query(None, description="Controller ID"),
+            sensor_id: Optional[str] = Query(None, description="Sensor ID"),
+            zone: Optional[str] = Query(None, description="Zone identifier"),
+            parameter: Optional[str] = Query(None, description="Measurement parameter name"),
+            limit: Optional[int] = Query(None, ge=1, le=10000, description="Maximum number of records")
+        ):
+            return await self._handle_historical_query(
+                start_time=start_time,
+                end_time=end_time,
+                controller_id=controller_id,
+                sensor_id=sensor_id,
+                zone=zone,
+                parameter=parameter,
+                limit=limit
+            )
 
     async def _handle_single_metric_report(
         self,
@@ -348,3 +379,71 @@ class AnalyticsHandlers:
             self.logger.warning(f"Invalid datetime format: {datetime_str}")
             return None
 
+    async def _handle_historical_query(
+        self,
+        start_time: Optional[str],
+        end_time: Optional[str],
+        controller_id: Optional[str],
+        sensor_id: Optional[str],
+        zone: Optional[str],
+        parameter: Optional[str],
+        limit: Optional[int]
+    ) -> HistoricalQueryResponseModel:
+        """Handle historical measurements query."""
+        try:
+            parsed_start_time = self._parse_datetime(start_time) if start_time else None
+            parsed_end_time = self._parse_datetime(end_time) if end_time else None
+
+            if parsed_start_time and parsed_end_time and parsed_start_time > parsed_end_time:
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "error": "Invalid time range",
+                        "message": "start_time must be before end_time"
+                    }
+                )
+
+            filters = HistoricalQueryFilter(
+                start_time=parsed_start_time,
+                end_time=parsed_end_time,
+                limit=limit,
+                controller_id=controller_id,
+                sensor_id=sensor_id,
+                zone=zone,
+                parameter=parameter
+            )
+
+            response = await self.analytics_service.query_historical_data(filters)
+            return HistoricalQueryResponseModel.from_domain(response)
+
+        except InvalidMetricError as e:
+            self.logger.warning(f"Invalid metric for historical query: {e.metric_name}")
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "Invalid metric",
+                    "message": str(e),
+                    "supported_metrics": e.supported_metrics
+                }
+            )
+
+        except ExternalServiceError as e:
+            self.logger.error(f"External service error in historical query: {e}")
+            raise HTTPException(
+                status_code=502,
+                detail={
+                    "error": "External service unavailable",
+                    "message": f"Go backend service error: {e.message}",
+                    "service": e.service_name
+                }
+            )
+
+        except Exception as e:
+            self.logger.error(f"Unexpected error in historical query: {e}")
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "error": "Internal server error",
+                    "message": "An unexpected error occurred while retrieving historical data"
+                }
+            )

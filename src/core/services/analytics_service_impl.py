@@ -21,7 +21,10 @@ from ..domain.analytics import (
     MultiReportResponse,
     TrendAnalysis,
     TrendDataPoint,
-    AnalyticsFilter
+    AnalyticsFilter,
+    HistoricalQueryFilter,
+    HistoricalDataPoint,
+    HistoricalQueryResponse
 )
 from ..domain.measurement import Measurement
 from .analytics_calculations import AnalyticsCalculations
@@ -198,6 +201,71 @@ class AnalyticsServiceImpl(AnalyticsService):
     def is_metric_supported(self, metric_name: str) -> bool:
         """Check if a metric is supported for analytics."""
         return metric_name in self.SUPPORTED_METRICS
+
+    async def query_historical_data(
+        self,
+        filters: HistoricalQueryFilter
+    ) -> HistoricalQueryResponse:
+        """Retrieve historical measurements applying provided filters."""
+        # Validate parameter if provided
+        parameter_filter = None
+        if filters.parameter:
+            if not self.is_metric_supported(filters.parameter):
+                raise InvalidMetricError(filters.parameter, list(self.SUPPORTED_METRICS.keys()))
+            parameter_filter = filters.parameter
+
+        measurements = await self.measurement_repository.get_measurements(
+            controller_id=filters.controller_id,
+            start_time=filters.start_time,
+            end_time=filters.end_time,
+            limit=filters.limit,
+            sensor_id=filters.sensor_id,
+            zone=filters.zone,
+            parameter=parameter_filter
+        )
+
+        if parameter_filter:
+            candidate_metrics = [parameter_filter]
+        else:
+            candidate_metrics = list(self.SUPPORTED_METRICS.keys())
+
+        data_points: List[HistoricalDataPoint] = []
+        for measurement in measurements:
+            for metric_name in candidate_metrics:
+                attribute = self.SUPPORTED_METRICS[metric_name]
+                value = getattr(measurement, attribute, None)
+                if value is None:
+                    continue
+
+                data_points.append(
+                    HistoricalDataPoint(
+                        timestamp=measurement.timestamp,
+                        controller_id=measurement.controller_id,
+                        parameter=metric_name,
+                        value=float(value),
+                        sensor_id=measurement.sensor_id,
+                        zone=measurement.zone
+                    )
+                )
+
+        data_points.sort(key=lambda point: point.timestamp)
+
+        response_filters = HistoricalQueryFilter(
+            start_time=filters.start_time,
+            end_time=filters.end_time,
+            limit=filters.limit,
+            controller_id=filters.controller_id,
+            sensor_id=filters.sensor_id,
+            zone=filters.zone,
+            parameter=filters.parameter
+        )
+
+        return HistoricalQueryResponse(
+            data_points=data_points,
+            generated_at=datetime.now(),
+            total_points=len(data_points),
+            filters_applied=response_filters
+        )
 
     async def _calculate_metrics_for_sensor(
         self, 

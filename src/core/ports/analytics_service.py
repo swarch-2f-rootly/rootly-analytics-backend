@@ -7,7 +7,9 @@ from ..domain.analytics import (
     MultiReportRequest,
     MultiReportResponse,
     TrendAnalysis,
-    AnalyticsFilter
+    AnalyticsFilter,
+    HistoricalQueryResponse,
+    HistoricalQueryFilter
 )
 
 
@@ -109,4 +111,12 @@ class AnalyticsService(ABC):
         Returns:
             True if metric is supported, False otherwise
         """
+        pass
+
+    @abstractmethod
+    async def query_historical_data(
+        self,
+        filters: HistoricalQueryFilter
+    ) -> HistoricalQueryResponse:
+        """Retrieve historical measurement data applying advanced filters."""
         pass

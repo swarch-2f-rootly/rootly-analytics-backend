@@ -51,7 +51,10 @@ class InfluxRepository(MeasurementRepository):
         start_time: Optional[datetime] = None,
         end_time: Optional[datetime] = None,
         limit: Optional[int] = None,
-        interval: Optional[str] = None
+        interval: Optional[str] = None,
+        sensor_id: Optional[str] = None,
+        zone: Optional[str] = None,
+        parameter: Optional[str] = None
     ) -> List[Measurement]:
         """
         Fetch measurements from InfluxDB with optional filters.
@@ -76,7 +79,10 @@ class InfluxRepository(MeasurementRepository):
                 start_time=start_time,
                 end_time=end_time,
                 limit=limit,
-                interval=interval
+                interval=interval,
+                sensor_id=sensor_id,
+                zone=zone,
+                parameter=parameter
             )
 
             self.logger.info(f"Executing Flux query: {flux_query}")
@@ -99,7 +105,10 @@ class InfluxRepository(MeasurementRepository):
         controllers: List[str],
         start_time: Optional[datetime] = None,
         end_time: Optional[datetime] = None,
-        limit: Optional[int] = None
+        limit: Optional[int] = None,
+        sensor_id: Optional[str] = None,
+        zone: Optional[str] = None,
+        parameter: Optional[str] = None
     ) -> List[Measurement]:
         """
         Fetch measurements for multiple controllers.
@@ -109,6 +118,9 @@ class InfluxRepository(MeasurementRepository):
             start_time: Start time for the query range
             end_time: End time for the query range
             limit: Maximum number of measurements per controller
+            sensor_id: Filter by sensor identifier
+            zone: Filter by zone identifier
+            parameter: Filter by measurement parameter
 
         Returns:
             Combined list of Measurement objects from all controllers
@@ -131,7 +143,10 @@ class InfluxRepository(MeasurementRepository):
                         controller_id=controller_id,
                         start_time=start_time,
                         end_time=end_time,
-                        limit=per_controller_limit
+                        limit=per_controller_limit,
+                        sensor_id=sensor_id,
+                        zone=zone,
+                        parameter=parameter
                     )
                     all_measurements.extend(measurements)
 
@@ -192,7 +207,10 @@ class InfluxRepository(MeasurementRepository):
         start_time: Optional[datetime] = None,
         end_time: Optional[datetime] = None,
         limit: Optional[int] = None,
-        interval: Optional[str] = None
+        interval: Optional[str] = None,
+        sensor_id: Optional[str] = None,
+        zone: Optional[str] = None,
+        parameter: Optional[str] = None
     ) -> str:
         """Build a Flux query string based on the provided parameters."""
         query_parts = []
@@ -218,6 +236,15 @@ class InfluxRepository(MeasurementRepository):
         # Filter by controller ID if specified
         if controller_id:
             query_parts.append(f'|> filter(fn: (r) => r["controller_id"] == "{controller_id}")')
+
+        if sensor_id:
+            query_parts.append(f'|> filter(fn: (r) => r["sensor_id"] == "{sensor_id}")')
+
+        if zone:
+            query_parts.append(f'|> filter(fn: (r) => r["zone"] == "{zone}")')
+
+        if parameter:
+            query_parts.append(f'|> filter(fn: (r) => r["_field"] == "{parameter}")')
 
         # Add aggregation if interval is specified
         if interval:
@@ -249,12 +276,16 @@ class InfluxRepository(MeasurementRepository):
             for record in table.records:
                 controller_id = record.values.get("controller_id", "")
                 timestamp = record.get_time()
+                sensor_id = record.values.get("sensor_id") or record.values.get("sensor")
+                zone = record.values.get("zone")
 
                 if not controller_id or not timestamp:
                     continue
 
-                # Create unique key for grouping
-                key = f"{controller_id}_{timestamp.isoformat()}"
+                # Create unique key for grouping (per controller/sensor/zone/time)
+                sensor_key = sensor_id or "__unknown_sensor__"
+                zone_key = zone or "__unknown_zone__"
+                key = f"{controller_id}_{sensor_key}_{zone_key}_{timestamp.isoformat()}"
 
                 # Extract field value
                 field = record.get_field()
@@ -265,6 +296,8 @@ class InfluxRepository(MeasurementRepository):
                         measurement_groups[key] = {
                             "controller_id": controller_id,
                             "timestamp": timestamp,
+                            "sensor_id": sensor_id,
+                            "zone": zone,
                             "fields": {}
                         }
 
@@ -280,7 +313,9 @@ class InfluxRepository(MeasurementRepository):
                 soil_humidity=group_data["fields"].get("soil_humidity"),
                 air_humidity=group_data["fields"].get("air_humidity"),
                 temperature=group_data["fields"].get("temperature"),
-                light_intensity=group_data["fields"].get("light_intensity")
+                light_intensity=group_data["fields"].get("light_intensity"),
+                sensor_id=group_data.get("sensor_id"),
+                zone=group_data.get("zone")
             )
             measurements.append(measurement)
 

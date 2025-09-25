@@ -15,6 +15,8 @@ class Measurement:
     air_humidity: Optional[float] = None
     temperature: Optional[float] = None
     light_intensity: Optional[float] = None
+    sensor_id: Optional[str] = None
+    zone: Optional[str] = None
 
     def __post_init__(self):
         """Validate measurement data after initialization."""
@@ -37,6 +39,12 @@ class Measurement:
         if self.light_intensity is not None:
             if self.light_intensity < 0:
                 raise ValueError("light_intensity must be non-negative")
+
+        if self.sensor_id is not None and not self.sensor_id.strip():
+            raise ValueError("sensor_id cannot be empty if provided")
+
+        if self.zone is not None and not self.zone.strip():
+            raise ValueError("zone cannot be empty if provided")
 
     @property
     def has_temperature(self) -> bool:
