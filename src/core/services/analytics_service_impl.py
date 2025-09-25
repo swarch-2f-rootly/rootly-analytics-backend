@@ -3,7 +3,7 @@ Implementation of the AnalyticsService port.
 This service orchestrates the analytics calculations and data access.
 """
 
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime
 import pandas as pd
 
@@ -272,6 +272,21 @@ class AnalyticsServiceImpl(AnalyticsService):
                            "Indicador de transpiración vegetal")
             ])
 
+        temperature_series = self._extract_time_series(
+            measurements, controller_id, "temperature"
+        )
+        temperature_trend = self.calculator.calculate_trend_metrics(temperature_series)
+        results.extend(
+            self._build_trend_metric_results(
+                metric_prefix="temperatura",
+                controller_id=controller_id,
+                timestamp=timestamp,
+                trend_data=temperature_trend,
+                value_unit="°C",
+                slope_unit="°C/h"
+            )
+        )
+
         return results
 
     async def _calculate_humidity_air_metrics(
@@ -293,6 +308,21 @@ class AnalyticsServiceImpl(AnalyticsService):
             MetricResult("humedad_aire_maxima", stats["max"], "%", timestamp, controller_id),
             MetricResult("humedad_aire_desviacion", stats["std_dev"], "%", timestamp, controller_id)
         ])
+
+        humidity_air_series = self._extract_time_series(
+            measurements, controller_id, "air_humidity"
+        )
+        humidity_air_trend = self.calculator.calculate_trend_metrics(humidity_air_series)
+        results.extend(
+            self._build_trend_metric_results(
+                metric_prefix="humedad_aire",
+                controller_id=controller_id,
+                timestamp=timestamp,
+                trend_data=humidity_air_trend,
+                value_unit="%",
+                slope_unit="%/h"
+            )
+        )
 
         return results
 
@@ -324,6 +354,21 @@ class AnalyticsServiceImpl(AnalyticsService):
                         "Indicador de estrés hídrico del cultivo")
         )
 
+        soil_series = self._extract_time_series(
+            measurements, controller_id, "soil_humidity"
+        )
+        soil_trend = self.calculator.calculate_trend_metrics(soil_series)
+        results.extend(
+            self._build_trend_metric_results(
+                metric_prefix="humedad_tierra",
+                controller_id=controller_id,
+                timestamp=timestamp,
+                trend_data=soil_trend,
+                value_unit="",
+                slope_unit="fraccion/h"
+            )
+        )
+
         return results
 
     async def _calculate_light_metrics(
@@ -353,6 +398,21 @@ class AnalyticsServiceImpl(AnalyticsService):
                         "Radiación fotosintética total diaria")
         )
 
+        light_series = self._extract_time_series(
+            measurements, controller_id, "light_intensity"
+        )
+        light_trend = self.calculator.calculate_trend_metrics(light_series)
+        results.extend(
+            self._build_trend_metric_results(
+                metric_prefix="luminosidad",
+                controller_id=controller_id,
+                timestamp=timestamp,
+                trend_data=light_trend,
+                value_unit="lux",
+                slope_unit="lux/h"
+            )
+        )
+
         return results
 
     def _measurements_to_dataframe(self, measurements: List[Measurement]) -> pd.DataFrame:
@@ -370,3 +430,59 @@ class AnalyticsServiceImpl(AnalyticsService):
         
         return pd.DataFrame(data)
 
+    def _extract_time_series(
+        self,
+        measurements: List[Measurement],
+        controller_id: str,
+        attribute: str
+    ) -> List[Tuple[datetime, float]]:
+        """Build ordered time series for the requested attribute."""
+        series = [
+            (m.timestamp, getattr(m, attribute))
+            for m in measurements
+            if m.controller_id == controller_id and getattr(m, attribute) is not None
+        ]
+        series.sort(key=lambda item: item[0])
+        return series
+
+    def _build_trend_metric_results(
+        self,
+        metric_prefix: str,
+        controller_id: str,
+        timestamp: datetime,
+        trend_data: Optional[dict],
+        value_unit: str,
+        slope_unit: Optional[str] = None
+    ) -> List[MetricResult]:
+        """Create metric results for trend information."""
+        if not trend_data:
+            return []
+
+        slope_unit = slope_unit or (f"{value_unit}/h" if value_unit else "unidad/h")
+
+        return [
+            MetricResult(
+                f"{metric_prefix}_tendencia_cambio",
+                trend_data["change"],
+                value_unit,
+                timestamp,
+                controller_id,
+                "Variación absoluta en el periodo analizado"
+            ),
+            MetricResult(
+                f"{metric_prefix}_tendencia_porcentual",
+                trend_data["percent_change"],
+                "%",
+                timestamp,
+                controller_id,
+                "Variación porcentual con respecto al primer dato"
+            ),
+            MetricResult(
+                f"{metric_prefix}_tendencia_pendiente",
+                trend_data["slope_per_hour"],
+                slope_unit,
+                timestamp,
+                controller_id,
+                "Cambio promedio por hora"
+            ),
+        ]

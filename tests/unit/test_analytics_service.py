@@ -193,6 +193,9 @@ class TestAnalyticsServiceImpl:
         assert "temperatura_promedio" in metric_names
         assert "temperatura_minima" in metric_names
         assert "temperatura_maxima" in metric_names
+        assert "temperatura_tendencia_cambio" in metric_names
+        assert "temperatura_tendencia_porcentual" in metric_names
+        assert "temperatura_tendencia_pendiente" in metric_names
 
     @pytest.mark.asyncio
     async def test_humidity_analytics_calculation(self, mock_measurement_repository, mock_logger, sample_measurements):
@@ -208,6 +211,9 @@ class TestAnalyticsServiceImpl:
         assert "humedad_aire_promedio" in metric_names
         assert "humedad_aire_minima" in metric_names
         assert "humedad_aire_maxima" in metric_names
+        assert "humedad_aire_tendencia_cambio" in metric_names
+        assert "humedad_aire_tendencia_porcentual" in metric_names
+        assert "humedad_aire_tendencia_pendiente" in metric_names
 
     @pytest.mark.asyncio
     async def test_soil_humidity_analytics_calculation(self, mock_measurement_repository, mock_logger, sample_measurements):
@@ -223,6 +229,9 @@ class TestAnalyticsServiceImpl:
         assert "humedad_tierra_promedio" in metric_names
         assert "humedad_tierra_minima" in metric_names
         assert "humedad_tierra_maxima" in metric_names
+        assert "humedad_tierra_tendencia_cambio" in metric_names
+        assert "humedad_tierra_tendencia_porcentual" in metric_names
+        assert "humedad_tierra_tendencia_pendiente" in metric_names
 
     @pytest.mark.asyncio
     async def test_light_analytics_calculation(self, mock_measurement_repository, mock_logger, sample_measurements):
@@ -238,3 +247,6 @@ class TestAnalyticsServiceImpl:
         assert "luminosidad_promedio" in metric_names
         assert "luminosidad_minima" in metric_names
         assert "luminosidad_maxima" in metric_names
+        assert "luminosidad_tendencia_cambio" in metric_names
+        assert "luminosidad_tendencia_porcentual" in metric_names
+        assert "luminosidad_tendencia_pendiente" in metric_names
