@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from unittest.mock import MagicMock
 
 from src.core.services.analytics_service_impl import AnalyticsServiceImpl
-from src.core.domain.analytics import AnalyticsFilter, MetricResult
+from src.core.domain.analytics import AnalyticsFilter, MetricResult, HistoricalQueryFilter
 from src.core.ports.exceptions import InvalidMetricError, InsufficientDataError
 
 
@@ -250,3 +250,44 @@ class TestAnalyticsServiceImpl:
         assert "luminosidad_tendencia_cambio" in metric_names
         assert "luminosidad_tendencia_porcentual" in metric_names
         assert "luminosidad_tendencia_pendiente" in metric_names
+
+    @pytest.mark.asyncio
+    async def test_query_historical_data_with_parameter(
+        self, mock_measurement_repository, mock_logger, sample_measurements
+    ):
+        """Test historical data query filtered by parameter."""
+        service = AnalyticsServiceImpl(mock_measurement_repository)
+
+        filters = HistoricalQueryFilter(
+            controller_id="device-001",
+            parameter="temperature"
+        )
+
+        response = await service.query_historical_data(filters)
+
+        assert response.total_points > 0
+        for point in response.data_points:
+            assert point.parameter == "temperature"
+            assert point.controller_id == "device-001"
+
+        mock_measurement_repository.get_measurements.assert_called_with(
+            controller_id="device-001",
+            start_time=None,
+            end_time=None,
+            limit=None,
+            sensor_id=None,
+            zone=None,
+            parameter="temperature"
+        )
+
+    @pytest.mark.asyncio
+    async def test_query_historical_data_invalid_parameter(
+        self, mock_measurement_repository, mock_logger
+    ):
+        """Historical data query with unsupported parameter should error."""
+        service = AnalyticsServiceImpl(mock_measurement_repository)
+
+        filters = HistoricalQueryFilter(parameter="invalid")
+
+        with pytest.raises(InvalidMetricError):
+            await service.query_historical_data(filters)

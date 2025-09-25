@@ -91,7 +91,21 @@ GET /api/v1/analytics/trends/{metric_name}
 - `end_time` (requerido): Tiempo de fin
 - `interval` (opcional): Intervalo de agregación (ej: "1h", "1d")
 
-### 4. Métricas Soportadas
+### 4. Consultas Históricas
+```
+GET /api/v1/analytics/historical
+```
+**Parámetros de consulta opcionales:**
+- `start_time` / `end_time`: Rango de fechas en formato ISO 8601
+- `controller_id`: Identificador del controlador
+- `sensor_id`: Identificador del sensor asociado
+- `zone`: Zona geográfica o lógica
+- `parameter`: Parámetro a consultar (`temperature`, `soil_humidity`, etc.)
+- `limit`: Número máximo de registros a retornar (1-10000)
+
+Retorna la serie histórica aplicada con los filtros solicitados.
+
+### 5. Métricas Soportadas
 ```
 GET /api/v1/analytics/metrics
 ```

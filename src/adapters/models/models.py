@@ -14,7 +14,10 @@ from ...core.domain.analytics import (
     MultiReportResponse,
     TrendAnalysis,
     TrendDataPoint,
-    AnalyticsFilter
+    AnalyticsFilter,
+    HistoricalQueryResponse,
+    HistoricalDataPoint,
+    HistoricalQueryFilter
 )
 
 
@@ -198,3 +201,63 @@ class HealthResponse(BaseModel):
     timestamp: datetime = Field(..., description="Health check timestamp")
     details: Optional[Dict[str, Any]] = Field(None, description="Additional health information")
 
+
+class HistoricalQueryFiltersModel(BaseModel):
+    """Model describing filters used for historical queries."""
+    start_time: Optional[datetime] = Field(None, description="Start time for the query")
+    end_time: Optional[datetime] = Field(None, description="End time for the query")
+    limit: Optional[int] = Field(None, description="Maximum number of measurements returned")
+    controller_id: Optional[str] = Field(None, description="Controller identifier filter")
+    sensor_id: Optional[str] = Field(None, description="Sensor identifier filter")
+    zone: Optional[str] = Field(None, description="Zone identifier filter")
+    parameter: Optional[str] = Field(None, description="Measurement parameter filter")
+
+    @classmethod
+    def from_domain(cls, filters: HistoricalQueryFilter) -> "HistoricalQueryFiltersModel":
+        return cls(
+            start_time=filters.start_time,
+            end_time=filters.end_time,
+            limit=filters.limit,
+            controller_id=filters.controller_id,
+            sensor_id=filters.sensor_id,
+            zone=filters.zone,
+            parameter=filters.parameter
+        )
+
+
+class HistoricalDataPointModel(BaseModel):
+    """Model representing a single historical measurement entry."""
+    timestamp: datetime = Field(..., description="Timestamp of the measurement")
+    controller_id: str = Field(..., description="Controller identifier")
+    parameter: str = Field(..., description="Measurement parameter name")
+    value: float = Field(..., description="Measured value")
+    sensor_id: Optional[str] = Field(None, description="Sensor identifier")
+    zone: Optional[str] = Field(None, description="Zone identifier")
+
+    @classmethod
+    def from_domain(cls, data_point: HistoricalDataPoint) -> "HistoricalDataPointModel":
+        return cls(
+            timestamp=data_point.timestamp,
+            controller_id=data_point.controller_id,
+            parameter=data_point.parameter,
+            value=data_point.value,
+            sensor_id=data_point.sensor_id,
+            zone=data_point.zone
+        )
+
+
+class HistoricalQueryResponseModel(BaseModel):
+    """Response model encapsulating historical measurement data."""
+    data_points: List[HistoricalDataPointModel] = Field(..., description="Historical measurement entries")
+    generated_at: datetime = Field(..., description="Response generation timestamp")
+    total_points: int = Field(..., description="Total number of data points returned")
+    filters_applied: HistoricalQueryFiltersModel = Field(..., description="Filters applied to the query")
+
+    @classmethod
+    def from_domain(cls, response: HistoricalQueryResponse) -> "HistoricalQueryResponseModel":
+        return cls(
+            data_points=[HistoricalDataPointModel.from_domain(dp) for dp in response.data_points],
+            generated_at=response.generated_at,
+            total_points=response.total_points,
+            filters_applied=HistoricalQueryFiltersModel.from_domain(response.filters_applied)
+        )

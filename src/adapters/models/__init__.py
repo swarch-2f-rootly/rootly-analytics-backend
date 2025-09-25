@@ -12,7 +12,10 @@ from .models import (
     TrendDataPointModel,
     TrendAnalysisResponse,
     ErrorResponse,
-    HealthResponse
+    HealthResponse,
+    HistoricalQueryResponseModel,
+    HistoricalDataPointModel,
+    HistoricalQueryFiltersModel
 )
 
 __all__ = [
@@ -24,5 +27,8 @@ __all__ = [
     "TrendDataPointModel",
     "TrendAnalysisResponse",
     "ErrorResponse",
-    "HealthResponse"
+    "HealthResponse",
+    "HistoricalQueryResponseModel",
+    "HistoricalDataPointModel",
+    "HistoricalQueryFiltersModel"
 ]

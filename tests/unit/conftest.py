@@ -33,7 +33,9 @@ def sample_measurements():
         soil_humidity=0.8,
         air_humidity=65.0,
         temperature=25.0,
-        light_intensity=1500.0
+        light_intensity=1500.0,
+        sensor_id="sensor-001",
+        zone="zone-a"
     )
     measurements.append(m1)
 
@@ -43,7 +45,9 @@ def sample_measurements():
         soil_humidity=0.6,
         air_humidity=70.0,
         temperature=26.0,
-        light_intensity=1600.0
+        light_intensity=1600.0,
+        sensor_id="sensor-001",
+        zone="zone-a"
     )
     measurements.append(m2)
 
@@ -53,7 +57,9 @@ def sample_measurements():
         soil_humidity=0.7,
         air_humidity=60.0,
         temperature=24.0,
-        light_intensity=1400.0
+        light_intensity=1400.0,
+        sensor_id="sensor-002",
+        zone="zone-b"
     )
     measurements.append(m3)
 

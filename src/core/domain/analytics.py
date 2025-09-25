@@ -12,6 +12,18 @@ class AnalyticsFilter:
 
 
 @dataclass
+class HistoricalQueryFilter:
+    """Filters specific to historical measurement queries."""
+    start_time: Optional[datetime] = None
+    end_time: Optional[datetime] = None
+    limit: Optional[int] = None
+    controller_id: Optional[str] = None
+    sensor_id: Optional[str] = None
+    zone: Optional[str] = None
+    parameter: Optional[str] = None
+
+
+@dataclass
 class MetricResult:
     """Value object representing the result of a single metric calculation."""
     metric_name: str
@@ -103,3 +115,23 @@ class TrendAnalysis:
         if not self.data_points:
             return 0.0
         return max(point.value for point in self.data_points)
+
+
+@dataclass
+class HistoricalDataPoint:
+    """Value object representing a single historical measurement entry."""
+    timestamp: datetime
+    controller_id: str
+    parameter: str
+    value: float
+    sensor_id: Optional[str] = None
+    zone: Optional[str] = None
+
+
+@dataclass
+class HistoricalQueryResponse:
+    """Aggregate representing filtered historical measurement data."""
+    data_points: List[HistoricalDataPoint]
+    generated_at: datetime
+    total_points: int
+    filters_applied: HistoricalQueryFilter

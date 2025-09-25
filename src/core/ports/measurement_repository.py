@@ -18,7 +18,10 @@ class MeasurementRepository(ABC):
         start_time: Optional[datetime] = None,
         end_time: Optional[datetime] = None,
         limit: Optional[int] = None,
-        interval: Optional[str] = None
+        interval: Optional[str] = None,
+        sensor_id: Optional[str] = None,
+        zone: Optional[str] = None,
+        parameter: Optional[str] = None
     ) -> List[Measurement]:
         """
         Fetch measurements with optional filters.
@@ -29,6 +32,9 @@ class MeasurementRepository(ABC):
             end_time: End time for the query range
             limit: Maximum number of measurements to return
             interval: Time interval for data aggregation
+            sensor_id: Filter by sensor identifier
+            zone: Filter by geographic or logical zone
+            parameter: Filter by measurement parameter/field
 
         Returns:
             List of Measurement objects
@@ -44,7 +50,10 @@ class MeasurementRepository(ABC):
         controllers: List[str],
         start_time: Optional[datetime] = None,
         end_time: Optional[datetime] = None,
-        limit: Optional[int] = None
+        limit: Optional[int] = None,
+        sensor_id: Optional[str] = None,
+        zone: Optional[str] = None,
+        parameter: Optional[str] = None
     ) -> List[Measurement]:
         """
         Fetch measurements for multiple controllers.
