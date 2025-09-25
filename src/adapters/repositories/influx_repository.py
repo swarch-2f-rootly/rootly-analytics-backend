@@ -284,5 +284,7 @@ class InfluxRepository(MeasurementRepository):
             )
             measurements.append(measurement)
 
-        return measurements
+        # Sort measurements to guarantee chronological order per controller
+        measurements.sort(key=lambda m: (m.controller_id, m.timestamp))
 
+        return measurements

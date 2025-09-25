@@ -4,7 +4,7 @@ Unit tests for the AnalyticsCalculations module.
 
 import pytest
 import math
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from src.core.services.analytics_calculations import AnalyticsCalculations
 from src.core.domain.measurement import Measurement
 
@@ -272,3 +272,28 @@ class TestAnalyticsCalculations:
         assert stats["max"] == 42.0
         assert stats["std_dev"] == 0.0
         assert stats["count"] == 1
+
+    def test_calculate_trend_metrics(self):
+        """Test trend metrics calculation with ordered time series."""
+        start = datetime.now(timezone.utc)
+        series = [
+            (start, 10.0),
+            (start + timedelta(hours=2), 14.0)
+        ]
+
+        trend = AnalyticsCalculations.calculate_trend_metrics(series)
+
+        assert trend is not None
+        assert trend["change"] == pytest.approx(4.0)
+        assert trend["percent_change"] == pytest.approx(40.0)
+        assert trend["slope_per_hour"] == pytest.approx(2.0)
+        assert trend["data_points"] == 2
+
+    def test_calculate_trend_metrics_insufficient_data(self):
+        """Trend metrics should be None when there is not enough data."""
+        start = datetime.now(timezone.utc)
+        series = [(start, 10.0)]
+
+        trend = AnalyticsCalculations.calculate_trend_metrics(series)
+
+        assert trend is None

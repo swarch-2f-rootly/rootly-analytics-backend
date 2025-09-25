@@ -4,7 +4,8 @@ Each function implements a specific agronomic formula as defined in the project 
 """
 
 import math
-from typing import List, Optional
+from datetime import datetime
+from typing import List, Optional, Tuple
 from ..domain.measurement import Measurement
 
 
@@ -185,10 +186,10 @@ class AnalyticsCalculations:
     def calculate_basic_statistics(values: List[float]) -> dict:
         """
         Calculate basic statistical measures for a dataset.
-        
+
         Args:
             values: List of numerical values
-            
+
         Returns:
             Dictionary with mean, min, max, std_dev, count
         """
@@ -200,23 +201,67 @@ class AnalyticsCalculations:
                 "std_dev": 0.0,
                 "count": 0
             }
-        
+
         count = len(values)
         mean = sum(values) / count
         min_val = min(values)
         max_val = max(values)
-        
+
         # Calculate standard deviation
         if count > 1:
             variance = sum((x - mean) ** 2 for x in values) / (count - 1)
             std_dev = math.sqrt(variance)
         else:
             std_dev = 0.0
-        
+
         return {
             "mean": mean,
             "min": min_val,
             "max": max_val,
             "std_dev": std_dev,
             "count": count
+        }
+
+    @staticmethod
+    def calculate_trend_metrics(
+        time_series: List[Tuple[datetime, float]]
+    ) -> Optional[dict]:
+        """
+        Calculate trend metrics (absolute change, percent change, slope).
+
+        Args:
+            time_series: Ordered list of (timestamp, value) pairs
+
+        Returns:
+            Dictionary with trend information or None if insufficient data
+        """
+        if len(time_series) < 2:
+            return None
+
+        start_time, start_value = time_series[0]
+        end_time, end_value = time_series[-1]
+
+        if start_value is None or end_value is None:
+            return None
+
+        change = end_value - start_value
+        percent_change = 0.0
+        if start_value != 0:
+            percent_change = (change / start_value) * 100
+
+        duration_hours = (end_time - start_time).total_seconds() / 3600
+        duration_hours = max(duration_hours, 0.0)
+
+        slope_per_hour = 0.0
+        if duration_hours > 0:
+            slope_per_hour = change / duration_hours
+
+        return {
+            "start_value": start_value,
+            "end_value": end_value,
+            "change": change,
+            "percent_change": percent_change,
+            "slope_per_hour": slope_per_hour,
+            "duration_hours": duration_hours,
+            "data_points": len(time_series)
         }
