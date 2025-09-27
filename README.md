@@ -118,12 +118,6 @@ Retorna la lista de métricas disponibles: `["temperatura", "humedad_aire", "hum
 
 ### Desarrollo Local
 
-1. **Configurar variables de entorno:**
-```bash
-cp config.py .env
-# Editar .env con las configuraciones apropiadas
-```
-
 2. **Ejecutar con Docker Compose (en la carpeta rootly-deployment):**
 ```bash
 docker-compose up -d

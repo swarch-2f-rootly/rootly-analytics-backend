@@ -19,7 +19,6 @@ class HistoricalQueryFilter:
     limit: Optional[int] = None
     controller_id: Optional[str] = None
     sensor_id: Optional[str] = None
-    zone: Optional[str] = None
     parameter: Optional[str] = None
 
 
@@ -125,7 +124,6 @@ class HistoricalDataPoint:
     parameter: str
     value: float
     sensor_id: Optional[str] = None
-    zone: Optional[str] = None
 
 
 @dataclass

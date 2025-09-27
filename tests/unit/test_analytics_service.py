@@ -190,12 +190,12 @@ class TestAnalyticsServiceImpl:
         # Should contain various temperature metrics
         metric_names = [r.metric_name for r in result.metrics]
 
-        assert "temperatura_promedio" in metric_names
-        assert "temperatura_minima" in metric_names
-        assert "temperatura_maxima" in metric_names
-        assert "temperatura_tendencia_cambio" in metric_names
-        assert "temperatura_tendencia_porcentual" in metric_names
-        assert "temperatura_tendencia_pendiente" in metric_names
+        assert "temperature_average" in metric_names
+        assert "temperature_minimum" in metric_names
+        assert "temperature_maximum" in metric_names
+        assert "temperature_trend_change" in metric_names
+        assert "temperature_trend_percent" in metric_names
+        assert "temperature_trend_slope" in metric_names
 
     @pytest.mark.asyncio
     async def test_humidity_analytics_calculation(self, mock_measurement_repository, mock_logger, sample_measurements):
@@ -208,12 +208,12 @@ class TestAnalyticsServiceImpl:
         # Should contain humidity metrics
         metric_names = [r.metric_name for r in result.metrics]
 
-        assert "humedad_aire_promedio" in metric_names
-        assert "humedad_aire_minima" in metric_names
-        assert "humedad_aire_maxima" in metric_names
-        assert "humedad_aire_tendencia_cambio" in metric_names
-        assert "humedad_aire_tendencia_porcentual" in metric_names
-        assert "humedad_aire_tendencia_pendiente" in metric_names
+        assert "air_humidity_average" in metric_names
+        assert "air_humidity_minimum" in metric_names
+        assert "air_humidity_maximum" in metric_names
+        assert "air_humidity_trend_change" in metric_names
+        assert "air_humidity_trend_percent" in metric_names
+        assert "air_humidity_trend_slope" in metric_names
 
     @pytest.mark.asyncio
     async def test_soil_humidity_analytics_calculation(self, mock_measurement_repository, mock_logger, sample_measurements):
@@ -226,12 +226,12 @@ class TestAnalyticsServiceImpl:
         # Should contain soil humidity metrics
         metric_names = [r.metric_name for r in result.metrics]
 
-        assert "humedad_tierra_promedio" in metric_names
-        assert "humedad_tierra_minima" in metric_names
-        assert "humedad_tierra_maxima" in metric_names
-        assert "humedad_tierra_tendencia_cambio" in metric_names
-        assert "humedad_tierra_tendencia_porcentual" in metric_names
-        assert "humedad_tierra_tendencia_pendiente" in metric_names
+        assert "soil_humidity_average" in metric_names
+        assert "soil_humidity_minimum" in metric_names
+        assert "soil_humidity_maximum" in metric_names
+        assert "soil_humidity_trend_change" in metric_names
+        assert "soil_humidity_trend_percent" in metric_names
+        assert "soil_humidity_trend_slope" in metric_names
 
     @pytest.mark.asyncio
     async def test_light_analytics_calculation(self, mock_measurement_repository, mock_logger, sample_measurements):
@@ -244,12 +244,12 @@ class TestAnalyticsServiceImpl:
         # Should contain light metrics
         metric_names = [r.metric_name for r in result.metrics]
 
-        assert "luminosidad_promedio" in metric_names
-        assert "luminosidad_minima" in metric_names
-        assert "luminosidad_maxima" in metric_names
-        assert "luminosidad_tendencia_cambio" in metric_names
-        assert "luminosidad_tendencia_porcentual" in metric_names
-        assert "luminosidad_tendencia_pendiente" in metric_names
+        assert "light_intensity_average" in metric_names
+        assert "light_intensity_minimum" in metric_names
+        assert "light_intensity_maximum" in metric_names
+        assert "light_intensity_trend_change" in metric_names
+        assert "light_intensity_trend_percent" in metric_names
+        assert "light_intensity_trend_slope" in metric_names
 
     @pytest.mark.asyncio
     async def test_query_historical_data_with_parameter(
@@ -259,7 +259,6 @@ class TestAnalyticsServiceImpl:
         service = AnalyticsServiceImpl(mock_measurement_repository)
 
         filters = HistoricalQueryFilter(
-            controller_id="device-001",
             parameter="temperature"
         )
 
@@ -268,15 +267,13 @@ class TestAnalyticsServiceImpl:
         assert response.total_points > 0
         for point in response.data_points:
             assert point.parameter == "temperature"
-            assert point.controller_id == "device-001"
 
         mock_measurement_repository.get_measurements.assert_called_with(
-            controller_id="device-001",
+            controller_id=None,
             start_time=None,
             end_time=None,
             limit=None,
             sensor_id=None,
-            zone=None,
             parameter="temperature"
         )
 

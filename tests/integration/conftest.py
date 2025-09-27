@@ -37,7 +37,7 @@ def sample_time_range():
 @pytest.fixture
 def sample_controller_id():
     """Sample controller ID for testing."""
-    return "device-001"
+    return "FARM-001"
 
 
 @pytest.fixture

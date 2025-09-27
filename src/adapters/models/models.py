@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field, validator
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 
+from ...core.domain.measurement import Measurement
 from ...core.domain.analytics import (
     AnalyticsReport,
     MetricResult,
@@ -56,6 +57,28 @@ class AnalyticsFilterModel(BaseModel):
             end_time=self.end_time,
             limit=self.limit
         )
+
+
+class MultiMetricReportRequest(BaseModel):
+    """Request model for multiple metrics analytics report."""
+    metrics: List[str] = Field(..., min_items=1, description="List of metric names to calculate")
+    controller_id: str = Field(..., description="Controller ID for the report")
+    start_time: Optional[str] = Field(None, description="Start time (ISO format)")
+    end_time: Optional[str] = Field(None, description="End time (ISO format)")
+
+    @validator('metrics')
+    def validate_metrics(cls, v):
+        """Validate metric names are not empty."""
+        if not all(metric.strip() for metric in v):
+            raise ValueError("Metric names cannot be empty")
+        return v
+
+    @validator('start_time', 'end_time', pre=True, always=True)
+    def validate_datetime_fields(cls, v):
+        """Convert empty strings to None for datetime fields."""
+        if v == "" or (isinstance(v, str) and not v.strip()):
+            return None
+        return v
 
 
 class SingleMetricReportResponse(BaseModel):
@@ -134,56 +157,6 @@ class MultiReportResponseModel(BaseModel):
         )
 
 
-class TrendDataPointModel(BaseModel):
-    """Model for trend analysis data points."""
-    timestamp: datetime = Field(..., description="Data point timestamp")
-    value: float = Field(..., description="Aggregated value for this time period")
-    interval: str = Field(..., description="Time interval used for aggregation")
-
-    @classmethod
-    def from_domain(cls, point: TrendDataPoint) -> "TrendDataPointModel":
-        """Convert from domain object to model."""
-        return cls(
-            timestamp=point.timestamp,
-            value=point.value,
-            interval=point.interval
-        )
-
-
-class TrendAnalysisResponse(BaseModel):
-    """Response model for trend analysis."""
-    metric_name: str = Field(..., description="Name of the analyzed metric")
-    controller_id: str = Field(..., description="Controller ID")
-    data_points: List[TrendDataPointModel] = Field(..., description="Time-series data points")
-    interval: str = Field(..., description="Time interval used for aggregation")
-    generated_at: datetime = Field(..., description="Analysis generation timestamp")
-    filters_applied: AnalyticsFilterModel = Field(..., description="Filters applied to the data")
-    
-    # Additional computed properties for convenience
-    total_points: int = Field(..., description="Total number of data points")
-    average_value: float = Field(..., description="Average value across all data points")
-    min_value: float = Field(..., description="Minimum value in the dataset")
-    max_value: float = Field(..., description="Maximum value in the dataset")
-
-    @classmethod
-    def from_domain(cls, trend: TrendAnalysis) -> "TrendAnalysisResponse":
-        """Convert from domain object to response model."""
-        return cls(
-            metric_name=trend.metric_name,
-            controller_id=trend.controller_id,
-            data_points=[TrendDataPointModel.from_domain(p) for p in trend.data_points],
-            interval=trend.interval,
-            generated_at=trend.generated_at,
-            filters_applied=AnalyticsFilterModel(
-                start_time=trend.filters_applied.start_time,
-                end_time=trend.filters_applied.end_time,
-                limit=trend.filters_applied.limit
-            ),
-            total_points=trend.total_points,
-            average_value=trend.average_value,
-            min_value=trend.min_value,
-            max_value=trend.max_value
-        )
 
 
 class ErrorResponse(BaseModel):
@@ -209,7 +182,6 @@ class HistoricalQueryFiltersModel(BaseModel):
     limit: Optional[int] = Field(None, description="Maximum number of measurements returned")
     controller_id: Optional[str] = Field(None, description="Controller identifier filter")
     sensor_id: Optional[str] = Field(None, description="Sensor identifier filter")
-    zone: Optional[str] = Field(None, description="Zone identifier filter")
     parameter: Optional[str] = Field(None, description="Measurement parameter filter")
 
     @classmethod
@@ -220,7 +192,6 @@ class HistoricalQueryFiltersModel(BaseModel):
             limit=filters.limit,
             controller_id=filters.controller_id,
             sensor_id=filters.sensor_id,
-            zone=filters.zone,
             parameter=filters.parameter
         )
 
@@ -232,7 +203,6 @@ class HistoricalDataPointModel(BaseModel):
     parameter: str = Field(..., description="Measurement parameter name")
     value: float = Field(..., description="Measured value")
     sensor_id: Optional[str] = Field(None, description="Sensor identifier")
-    zone: Optional[str] = Field(None, description="Zone identifier")
 
     @classmethod
     def from_domain(cls, data_point: HistoricalDataPoint) -> "HistoricalDataPointModel":
@@ -241,8 +211,7 @@ class HistoricalDataPointModel(BaseModel):
             controller_id=data_point.controller_id,
             parameter=data_point.parameter,
             value=data_point.value,
-            sensor_id=data_point.sensor_id,
-            zone=data_point.zone
+            sensor_id=data_point.sensor_id
         )
 
 
@@ -260,4 +229,80 @@ class HistoricalQueryResponseModel(BaseModel):
             generated_at=response.generated_at,
             total_points=response.total_points,
             filters_applied=HistoricalQueryFiltersModel.from_domain(response.filters_applied)
+        )
+
+
+class SupportedMetricsResponse(BaseModel):
+    """Response model for supported metrics endpoint."""
+    metrics: List[str] = Field(..., description="List of supported metric names")
+
+
+class LatestMeasurementResponse(BaseModel):
+    """Response model for latest measurement endpoint."""
+    controller_id: str = Field(..., description="Controller ID requested")
+    measurement: Optional[MetricResultModel] = Field(None, description="Latest measurement data, null if no data")
+    status: str = Field(..., description="Response status: 'data' or 'no_data'")
+    last_checked: datetime = Field(default_factory=datetime.now, description="Timestamp when the check was performed")
+    data_age_minutes: Optional[float] = Field(None, description="How old the data is in minutes (null if no data)")
+
+    @classmethod
+    def from_measurement(
+        cls,
+        controller_id: str,
+        measurement: Optional[Measurement]
+    ) -> "LatestMeasurementResponse":
+        """Create response from a measurement or None."""
+
+        if measurement:
+            # Create a metric result with basic measurement info
+            # Since this is "latest measurement", we'll use temperature as the primary metric
+            # or whichever is available
+            primary_value = None
+            primary_unit = None
+            primary_name = "measurement"
+
+            if measurement.has_temperature:
+                primary_value = measurement.temperature
+                primary_unit = "°C"
+                primary_name = "temperature"
+            elif measurement.has_humidity_air:
+                primary_value = measurement.air_humidity
+                primary_unit = "%"
+                primary_name = "air_humidity"
+            elif measurement.has_humidity_soil:
+                primary_value = measurement.soil_humidity
+                primary_unit = ""
+                primary_name = "soil_humidity"
+            elif measurement.has_light:
+                primary_value = measurement.light_intensity
+                primary_unit = "lux"
+                primary_name = "light_intensity"
+
+            if primary_value is not None:
+                metric_result = MetricResult(
+                    metric_name=primary_name,
+                    value=primary_value,
+                    unit=primary_unit,
+                    calculated_at=measurement.timestamp,
+                    controller_id=controller_id,
+                    description="Latest measurement"
+                )
+                metric_model = MetricResultModel.from_domain(metric_result)
+
+                # Calculate data age
+                data_age = (datetime.now() - measurement.timestamp).total_seconds() / 60
+
+                return cls(
+                    controller_id=controller_id,
+                    measurement=metric_model,
+                    status="data",
+                    data_age_minutes=round(data_age, 2)
+                )
+
+        # No data case
+        return cls(
+            controller_id=controller_id,
+            measurement=None,
+            status="no_data",
+            data_age_minutes=None
         )

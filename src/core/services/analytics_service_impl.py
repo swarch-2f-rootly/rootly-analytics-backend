@@ -220,7 +220,6 @@ class AnalyticsServiceImpl(AnalyticsService):
             end_time=filters.end_time,
             limit=filters.limit,
             sensor_id=filters.sensor_id,
-            zone=filters.zone,
             parameter=parameter_filter
         )
 
@@ -243,8 +242,7 @@ class AnalyticsServiceImpl(AnalyticsService):
                         controller_id=measurement.controller_id,
                         parameter=metric_name,
                         value=float(value),
-                        sensor_id=measurement.sensor_id,
-                        zone=measurement.zone
+                        sensor_id=measurement.sensor_id
                     )
                 )
 
@@ -256,7 +254,6 @@ class AnalyticsServiceImpl(AnalyticsService):
             limit=filters.limit,
             controller_id=filters.controller_id,
             sensor_id=filters.sensor_id,
-            zone=filters.zone,
             parameter=filters.parameter
         )
 
@@ -311,17 +308,17 @@ class AnalyticsServiceImpl(AnalyticsService):
 
         # Basic statistics
         results.extend([
-            MetricResult("temperatura_promedio", stats["mean"], "°C", timestamp, controller_id),
-            MetricResult("temperatura_minima", stats["min"], "°C", timestamp, controller_id),
-            MetricResult("temperatura_maxima", stats["max"], "°C", timestamp, controller_id),
-            MetricResult("temperatura_desviacion", stats["std_dev"], "°C", timestamp, controller_id)
+            MetricResult("temperature_average", stats["mean"], "°C", timestamp, controller_id),
+            MetricResult("temperature_minimum", stats["min"], "°C", timestamp, controller_id),
+            MetricResult("temperature_maximum", stats["max"], "°C", timestamp, controller_id),
+            MetricResult("temperature_std_deviation", stats["std_dev"], "°C", timestamp, controller_id)
         ])
 
         # Growing Degree Days
         gdd = self.calculator.calculate_growing_degree_days(temp_measurements)
         results.append(
-            MetricResult("grados_dia_crecimiento", gdd, "GDD", timestamp, controller_id,
-                        "Predice etapas de desarrollo vegetal")
+            MetricResult("growing_degree_days", gdd, "GDD", timestamp, controller_id,
+                        "Predicts plant development stages")
         )
 
         # Calculate dew point and VPD if humidity data is available
@@ -334,10 +331,10 @@ class AnalyticsServiceImpl(AnalyticsService):
             vpd = self.calculator.calculate_vapor_pressure_deficit(avg_temp, avg_humidity)
             
             results.extend([
-                MetricResult("punto_rocio", dew_point, "°C", timestamp, controller_id,
-                           "Temperatura de condensación"),
-                MetricResult("deficit_presion_vapor", vpd, "kPa", timestamp, controller_id,
-                           "Indicador de transpiración vegetal")
+                MetricResult("dew_point", dew_point, "°C", timestamp, controller_id,
+                           "Temperature at which water vapor condenses"),
+                MetricResult("vapor_pressure_deficit", vpd, "kPa", timestamp, controller_id,
+                           "Plant transpiration indicator")
             ])
 
         temperature_series = self._extract_time_series(
@@ -346,7 +343,7 @@ class AnalyticsServiceImpl(AnalyticsService):
         temperature_trend = self.calculator.calculate_trend_metrics(temperature_series)
         results.extend(
             self._build_trend_metric_results(
-                metric_prefix="temperatura",
+                metric_prefix="temperature",
                 controller_id=controller_id,
                 timestamp=timestamp,
                 trend_data=temperature_trend,
@@ -371,10 +368,10 @@ class AnalyticsServiceImpl(AnalyticsService):
         stats = self.calculator.calculate_basic_statistics(humidities)
 
         results.extend([
-            MetricResult("humedad_aire_promedio", stats["mean"], "%", timestamp, controller_id),
-            MetricResult("humedad_aire_minima", stats["min"], "%", timestamp, controller_id),
-            MetricResult("humedad_aire_maxima", stats["max"], "%", timestamp, controller_id),
-            MetricResult("humedad_aire_desviacion", stats["std_dev"], "%", timestamp, controller_id)
+            MetricResult("air_humidity_average", stats["mean"], "%", timestamp, controller_id),
+            MetricResult("air_humidity_minimum", stats["min"], "%", timestamp, controller_id),
+            MetricResult("air_humidity_maximum", stats["max"], "%", timestamp, controller_id),
+            MetricResult("air_humidity_std_deviation", stats["std_dev"], "%", timestamp, controller_id)
         ])
 
         humidity_air_series = self._extract_time_series(
@@ -383,7 +380,7 @@ class AnalyticsServiceImpl(AnalyticsService):
         humidity_air_trend = self.calculator.calculate_trend_metrics(humidity_air_series)
         results.extend(
             self._build_trend_metric_results(
-                metric_prefix="humedad_aire",
+                metric_prefix="air_humidity",
                 controller_id=controller_id,
                 timestamp=timestamp,
                 trend_data=humidity_air_trend,
@@ -408,19 +405,11 @@ class AnalyticsServiceImpl(AnalyticsService):
         stats = self.calculator.calculate_basic_statistics(soil_humidities)
 
         results.extend([
-            MetricResult("humedad_tierra_promedio", stats["mean"], "", timestamp, controller_id),
-            MetricResult("humedad_tierra_minima", stats["min"], "", timestamp, controller_id),
-            MetricResult("humedad_tierra_maxima", stats["max"], "", timestamp, controller_id),
-            MetricResult("humedad_tierra_desviacion", stats["std_dev"], "", timestamp, controller_id)
+            MetricResult("soil_humidity_average", stats["mean"], "", timestamp, controller_id),
+            MetricResult("soil_humidity_minimum", stats["min"], "", timestamp, controller_id),
+            MetricResult("soil_humidity_maximum", stats["max"], "", timestamp, controller_id),
+            MetricResult("soil_humidity_std_deviation", stats["std_dev"], "", timestamp, controller_id)
         ])
-
-        # Water Deficit Index
-        avg_moisture = stats["mean"]
-        wdi = self.calculator.calculate_water_deficit_index(avg_moisture)
-        results.append(
-            MetricResult("indice_deficit_agua", wdi, "%", timestamp, controller_id,
-                        "Indicador de estrés hídrico del cultivo")
-        )
 
         soil_series = self._extract_time_series(
             measurements, controller_id, "soil_humidity"
@@ -428,12 +417,12 @@ class AnalyticsServiceImpl(AnalyticsService):
         soil_trend = self.calculator.calculate_trend_metrics(soil_series)
         results.extend(
             self._build_trend_metric_results(
-                metric_prefix="humedad_tierra",
+                metric_prefix="soil_humidity",
                 controller_id=controller_id,
                 timestamp=timestamp,
                 trend_data=soil_trend,
                 value_unit="",
-                slope_unit="fraccion/h"
+                slope_unit="fraction/h"
             )
         )
 
@@ -453,17 +442,17 @@ class AnalyticsServiceImpl(AnalyticsService):
         stats = self.calculator.calculate_basic_statistics(light_values)
 
         results.extend([
-            MetricResult("luminosidad_promedio", stats["mean"], "lux", timestamp, controller_id),
-            MetricResult("luminosidad_minima", stats["min"], "lux", timestamp, controller_id),
-            MetricResult("luminosidad_maxima", stats["max"], "lux", timestamp, controller_id),
-            MetricResult("luminosidad_desviacion", stats["std_dev"], "lux", timestamp, controller_id)
+            MetricResult("light_intensity_average", stats["mean"], "lux", timestamp, controller_id),
+            MetricResult("light_intensity_minimum", stats["min"], "lux", timestamp, controller_id),
+            MetricResult("light_intensity_maximum", stats["max"], "lux", timestamp, controller_id),
+            MetricResult("light_intensity_std_deviation", stats["std_dev"], "lux", timestamp, controller_id)
         ])
 
         # Daily Light Integral
         dli = self.calculator.calculate_daily_light_integral(stats["mean"])
         results.append(
-            MetricResult("integral_luz_diaria", dli, "mol/m²/día", timestamp, controller_id,
-                        "Radiación fotosintética total diaria")
+            MetricResult("daily_light_integral", dli, "mol/m²/day", timestamp, controller_id,
+                        "Total photosynthetic radiation per day")
         )
 
         light_series = self._extract_time_series(
@@ -472,7 +461,7 @@ class AnalyticsServiceImpl(AnalyticsService):
         light_trend = self.calculator.calculate_trend_metrics(light_series)
         results.extend(
             self._build_trend_metric_results(
-                metric_prefix="luminosidad",
+                metric_prefix="light_intensity",
                 controller_id=controller_id,
                 timestamp=timestamp,
                 trend_data=light_trend,
@@ -526,31 +515,38 @@ class AnalyticsServiceImpl(AnalyticsService):
         if not trend_data:
             return []
 
-        slope_unit = slope_unit or (f"{value_unit}/h" if value_unit else "unidad/h")
+        slope_unit = slope_unit or (f"{value_unit}/h" if value_unit else "unit/h")
 
         return [
             MetricResult(
-                f"{metric_prefix}_tendencia_cambio",
+                f"{metric_prefix}_trend_change",
                 trend_data["change"],
                 value_unit,
                 timestamp,
                 controller_id,
-                "Variación absoluta en el periodo analizado"
+                "Absolute change during the analyzed period"
             ),
             MetricResult(
-                f"{metric_prefix}_tendencia_porcentual",
+                f"{metric_prefix}_trend_percent",
                 trend_data["percent_change"],
                 "%",
                 timestamp,
                 controller_id,
-                "Variación porcentual con respecto al primer dato"
+                "Percentage change relative to first data point"
             ),
             MetricResult(
-                f"{metric_prefix}_tendencia_pendiente",
+                f"{metric_prefix}_trend_slope",
                 trend_data["slope_per_hour"],
                 slope_unit,
                 timestamp,
                 controller_id,
-                "Cambio promedio por hora"
+                "Average change per hour"
             ),
         ]
+
+    async def get_latest_measurement(
+        self,
+        controller_id: str
+    ) -> Optional[Measurement]:
+        """Get the most recent measurement for a specific controller."""
+        return await self.measurement_repository.get_latest_measurement(controller_id)

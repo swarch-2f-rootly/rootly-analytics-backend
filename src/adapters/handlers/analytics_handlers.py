@@ -5,7 +5,7 @@ These handlers implement the REST API interface for the analytics service.
 
 from fastapi import APIRouter, HTTPException, Depends, Query
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
 
 from ...core.ports.analytics_service import AnalyticsService
@@ -17,19 +17,19 @@ from ...core.ports.exceptions import (
 )
 from ...core.domain.analytics import (
     AnalyticsFilter,
-    MultiReportRequest,
     AnalyticsReport,
-    MultiReportResponse,
-    TrendAnalysis,
-    HistoricalQueryFilter
+    HistoricalQueryFilter,
+    TrendAnalysis
 )
 from ..models import (
     SingleMetricReportResponse,
-    MultiReportRequestModel,
-    MultiReportResponseModel,
-    TrendAnalysisResponse,
+    MultiMetricReportRequest,
+    MetricResultModel,
+    AnalyticsFilterModel,
     ErrorResponse,
-    HistoricalQueryResponseModel
+    HistoricalQueryResponseModel,
+    SupportedMetricsResponse,
+    LatestMeasurementResponse
 )
 
 
@@ -62,6 +62,7 @@ class AnalyticsHandlers:
             responses={
                 400: {"model": ErrorResponse},
                 404: {"model": ErrorResponse},
+                422: {"model": ErrorResponse},
                 500: {"model": ErrorResponse}
             },
             summary="Single Metric Report",
@@ -69,49 +70,75 @@ class AnalyticsHandlers:
         )
         async def single_metric_report(
             metric_name: str,
-            id_controlador: str = Query(..., description="Controller ID (required)"),
-            start_time: Optional[str] = Query(None, description="Start time (ISO format)"),
-            end_time: Optional[str] = Query(None, description="End time (ISO format)"),
-            limit: Optional[int] = Query(None, ge=1, le=10000, description="Maximum number of records")
+            controller_id: str = Query(..., description="Controller ID to get metrics for"),
+            start_time: Optional[str] = Query(None, description="Start time for the report (ISO format)"),
+            end_time: Optional[str] = Query(None, description="End time for the report (ISO format)"),
+            limit: Optional[int] = Query(None, description="Maximum number of data points to return")
         ):
+            self.logger.info(f"GET /report/{metric_name} called with controller_id={controller_id}")
+            # Validate controller_id is not empty
+            if not controller_id or not controller_id.strip():
+                raise HTTPException(
+                    status_code=422,
+                    detail={
+                        "error": "Validation error",
+                        "message": "controller_id cannot be empty"
+                    }
+                )
+
             return await self._handle_single_metric_report(
-                metric_name, id_controlador, start_time, end_time, limit
+                metric_name, controller_id, start_time, end_time, limit
             )
+
 
         @self.router.post(
             "/multi-report",
-            response_model=MultiReportResponseModel,
-            responses={
-                400: {"model": ErrorResponse},
-                500: {"model": ErrorResponse}
-            },
-            summary="Multiple Metrics Report",
-            description="Generate analytics report for multiple sensor metrics and controllers"
-        )
-        async def multi_report(request: MultiReportRequestModel):
-            return await self._handle_multi_report(request)
-
-        @self.router.get(
-            "/trends/{metric_name}",
-            response_model=TrendAnalysisResponse,
+            response_model=SingleMetricReportResponse,
             responses={
                 400: {"model": ErrorResponse},
                 404: {"model": ErrorResponse},
                 500: {"model": ErrorResponse}
             },
+            summary="Multiple Metrics Report",
+            description="Generate analytics report for multiple sensor metrics"
+        )
+        async def multi_metric_report(request: MultiMetricReportRequest):
+            # Validate controller_id is not empty
+            if not request.controller_id or not request.controller_id.strip():
+                raise HTTPException(
+                    status_code=422,
+                    detail={
+                        "error": "Validation error",
+                        "message": "controller_id cannot be empty"
+                    }
+                )
+
+            return await self._handle_multi_metric_report(request)
+
+
+        @self.router.get(
+            "/trends/{metric_name}",
+            response_model=TrendAnalysis,
+            responses={
+                400: {"model": ErrorResponse},
+                404: {"model": ErrorResponse},
+                422: {"model": ErrorResponse},
+                500: {"model": ErrorResponse}
+            },
             summary="Trend Analysis",
-            description="Generate trend analysis for a specific metric over time"
+            description="Returns time-series data aggregated by an interval for trend visualization"
         )
         async def trend_analysis(
             metric_name: str,
-            id_controlador: str = Query(..., description="Controller ID (required)"),
-            start_time: str = Query(..., description="Start time (ISO format, required)"),
-            end_time: str = Query(..., description="End time (ISO format, required)"),
-            interval: str = Query("1h", description="Time interval (e.g., '1h', '1d')")
+            controller_id: str = Query(..., description="Controller ID to get metrics for"),
+            start_time: str = Query(..., description="Start time for the analysis (ISO format)"),
+            end_time: str = Query(..., description="End time for the analysis (ISO format)"),
+            interval: str = Query(..., description="Aggregation interval (e.g., '1h', '1d')")
         ):
             return await self._handle_trend_analysis(
-                metric_name, id_controlador, start_time, end_time, interval
+                metric_name, controller_id, start_time, end_time, interval
             )
+
 
         @self.router.get(
             "/metrics",
@@ -122,13 +149,19 @@ class AnalyticsHandlers:
         async def supported_metrics():
             return self.analytics_service.get_supported_metrics()
 
+
         @self.router.get(
-            "/health",
-            summary="Health Check",
-            description="Check if the analytics service is healthy"
+            "/latest/{controller_id}",
+            response_model=LatestMeasurementResponse,
+            responses={
+                404: {"model": ErrorResponse},
+                500: {"model": ErrorResponse}
+            },
+            summary="Latest Measurement",
+            description="Get the most recent measurement for a specific controller from the last 10 minutes"
         )
-        async def health_check():
-            return {"status": "healthy", "service": "analytics", "timestamp": datetime.now()}
+        async def get_latest_measurement(controller_id: str):
+            return await self._handle_latest_measurement(controller_id)
 
         @self.router.get(
             "/historical",
@@ -145,7 +178,6 @@ class AnalyticsHandlers:
             end_time: Optional[str] = Query(None, description="End time (ISO format)"),
             controller_id: Optional[str] = Query(None, description="Controller ID"),
             sensor_id: Optional[str] = Query(None, description="Sensor ID"),
-            zone: Optional[str] = Query(None, description="Zone identifier"),
             parameter: Optional[str] = Query(None, description="Measurement parameter name"),
             limit: Optional[int] = Query(None, ge=1, le=10000, description="Maximum number of records")
         ):
@@ -154,7 +186,6 @@ class AnalyticsHandlers:
                 end_time=end_time,
                 controller_id=controller_id,
                 sensor_id=sensor_id,
-                zone=zone,
                 parameter=parameter,
                 limit=limit
             )
@@ -230,95 +261,47 @@ class AnalyticsHandlers:
                 }
             )
 
-    async def _handle_multi_report(
-        self, request: MultiReportRequestModel
-    ) -> MultiReportResponseModel:
-        """Handle multi-report request."""
-        try:
-            # Convert to domain object
-            domain_request = request.to_domain()
-
-            # Generate multi-report
-            response = await self.analytics_service.generate_multi_report(domain_request)
-
-            # Convert to response model
-            return MultiReportResponseModel.from_domain(response)
-
-        except InvalidMetricError as e:
-            self.logger.warning(f"Invalid metric in multi-report: {e.metric_name}")
-            raise HTTPException(
-                status_code=400,
-                detail={
-                    "error": "Invalid metric",
-                    "message": str(e),
-                    "supported_metrics": e.supported_metrics
-                }
-            )
-        
-        except ExternalServiceError as e:
-            self.logger.error(f"External service error in multi-report: {e}")
-            raise HTTPException(
-                status_code=502,
-                detail={
-                    "error": "External service unavailable",
-                    "message": f"Go backend service error: {e.message}",
-                    "service": e.service_name
-                }
-            )
-        
-        except Exception as e:
-            self.logger.error(f"Unexpected error in multi-report: {e}")
-            raise HTTPException(
-                status_code=500,
-                detail={
-                    "error": "Internal server error",
-                    "message": "An unexpected error occurred while generating the multi-report"
-                }
-            )
-
     async def _handle_trend_analysis(
         self,
         metric_name: str,
-        id_controlador: str,
+        controller_id: str,
         start_time: str,
         end_time: str,
         interval: str
-    ) -> TrendAnalysisResponse:
+    ) -> TrendAnalysis:
         """Handle trend analysis request."""
         try:
-            # Parse required datetime parameters
+            # Parse datetime parameters
             parsed_start_time = self._parse_datetime(start_time)
             parsed_end_time = self._parse_datetime(end_time)
-            
-            if not parsed_start_time or not parsed_end_time:
+
+            if parsed_start_time is None:
                 raise HTTPException(
-                    status_code=400,
+                    status_code=422,
                     detail={
                         "error": "Invalid datetime format",
-                        "message": "start_time and end_time must be valid ISO format timestamps"
+                        "message": "start_time must be a valid ISO format timestamp"
                     }
                 )
 
-            # Validate time range
-            if parsed_start_time >= parsed_end_time:
+            if parsed_end_time is None:
                 raise HTTPException(
-                    status_code=400,
+                    status_code=422,
                     detail={
-                        "error": "Invalid time range",
-                        "message": "start_time must be before end_time"
+                        "error": "Invalid datetime format",
+                        "message": "end_time must be a valid ISO format timestamp"
                     }
                 )
 
             # Generate trend analysis
-            trend = await self.analytics_service.generate_trend_analysis(
-                metric_name, id_controlador, parsed_start_time, parsed_end_time, interval
+            trend_analysis = await self.analytics_service.generate_trend_analysis(
+                metric_name, controller_id, parsed_start_time, parsed_end_time, interval
             )
 
-            # Convert to response model
-            return TrendAnalysisResponse.from_domain(trend)
+            return trend_analysis
 
         except InvalidMetricError as e:
-            self.logger.warning(f"Invalid metric for trend analysis: {e.metric_name}")
+            self.logger.warning(f"Invalid metric requested: {e.metric_name}")
             raise HTTPException(
                 status_code=400,
                 detail={
@@ -327,9 +310,9 @@ class AnalyticsHandlers:
                     "supported_metrics": e.supported_metrics
                 }
             )
-        
+
         except InsufficientDataError as e:
-            self.logger.warning(f"Insufficient data for trend analysis: {e}")
+            self.logger.warning(f"Insufficient data: {e}")
             raise HTTPException(
                 status_code=404,
                 detail={
@@ -337,9 +320,9 @@ class AnalyticsHandlers:
                     "message": str(e)
                 }
             )
-        
+
         except ExternalServiceError as e:
-            self.logger.error(f"External service error in trend analysis: {e}")
+            self.logger.error(f"External service error: {e}")
             raise HTTPException(
                 status_code=502,
                 detail={
@@ -348,11 +331,7 @@ class AnalyticsHandlers:
                     "service": e.service_name
                 }
             )
-        
-        except HTTPException:
-            # Re-raise HTTP exceptions
-            raise
-        
+
         except Exception as e:
             self.logger.error(f"Unexpected error in trend analysis: {e}")
             raise HTTPException(
@@ -362,6 +341,122 @@ class AnalyticsHandlers:
                     "message": "An unexpected error occurred while generating trend analysis"
                 }
             )
+
+    async def _handle_multi_metric_report(
+        self, request: MultiMetricReportRequest
+    ) -> SingleMetricReportResponse:
+        """Handle multi-metric report request."""
+        try:
+            # Parse datetime parameters - if parsing fails, use None (will trigger default 30-day range)
+            parsed_start_time = self._parse_datetime(request.start_time) if request.start_time else None
+            parsed_end_time = self._parse_datetime(request.end_time) if request.end_time else None
+
+            # If no time range is specified or if parsing failed for either timestamp, use last 30 days
+            if not parsed_start_time and not parsed_end_time:
+                now = datetime.now()
+                parsed_end_time = now
+                parsed_start_time = now - timedelta(days=30)
+            elif not parsed_start_time or not parsed_end_time:
+                # If only one timestamp is provided/valid, ignore it and use default 30-day range
+                now = datetime.now()
+                parsed_end_time = now
+                parsed_start_time = now - timedelta(days=30)
+
+            # Validate time range
+            if parsed_start_time and parsed_end_time and parsed_start_time >= parsed_end_time:
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "error": "Invalid time range",
+                        "message": "start_time must be before end_time"
+                    }
+                )
+
+            # Create filters
+            filters = AnalyticsFilter(
+                start_time=parsed_start_time,
+                end_time=parsed_end_time,
+                limit=None  # No limit for multi-metric reports
+            )
+
+            # Generate reports for all metrics
+            all_metrics = []
+            total_data_points = 0
+            latest_generated_at = None
+
+            for metric_name in request.metrics:
+                try:
+                    report = await self.analytics_service.generate_single_metric_report(
+                        metric_name, request.controller_id, filters
+                    )
+
+                    # Accumulate metrics
+                    all_metrics.extend(report.metrics)
+                    total_data_points = max(total_data_points, report.data_points_count)
+
+                    # Keep the latest generation timestamp
+                    if latest_generated_at is None or report.generated_at > latest_generated_at:
+                        latest_generated_at = report.generated_at
+
+                except InvalidMetricError as e:
+                    self.logger.warning(f"Invalid metric '{metric_name}' requested: {e}")
+                    raise HTTPException(
+                        status_code=400,
+                        detail={
+                            "error": "Invalid metric",
+                            "message": f"Metric '{metric_name}' is not valid",
+                            "supported_metrics": e.supported_metrics
+                        }
+                    )
+
+                except InsufficientDataError as e:
+                    self.logger.warning(f"Insufficient data for metric '{metric_name}': {e}")
+                    raise HTTPException(
+                        status_code=404,
+                        detail={
+                            "error": "Insufficient data",
+                            "message": f"Not enough data available for metric '{metric_name}': {str(e)}"
+                        }
+                    )
+
+                except ExternalServiceError as e:
+                    self.logger.error(f"External service error for metric '{metric_name}': {e}")
+                    raise HTTPException(
+                        status_code=502,
+                        detail={
+                            "error": "External service unavailable",
+                            "message": f"Go backend service error for metric '{metric_name}': {e.message}",
+                            "service": e.service_name
+                        }
+                    )
+
+            # Create combined response
+            return SingleMetricReportResponse(
+                controller_id=request.controller_id,
+                metrics=[MetricResultModel.from_domain(m) for m in all_metrics],
+                generated_at=latest_generated_at,
+                data_points_count=total_data_points,
+                filters_applied=AnalyticsFilterModel(
+                    start_time=parsed_start_time,
+                    end_time=parsed_end_time,
+                    limit=None
+                )
+            )
+
+        except HTTPException:
+            # Re-raise HTTP exceptions as they are already properly formatted
+            raise
+
+        except Exception as e:
+            self.logger.error(f"Unexpected error in multi-metric report: {e}")
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "error": "Internal server error",
+                    "message": "An unexpected error occurred while generating the multi-metric report"
+                }
+            )
+
 
     def _parse_datetime(self, datetime_str: Optional[str]) -> Optional[datetime]:
         """Parse datetime string to datetime object."""
@@ -385,7 +480,6 @@ class AnalyticsHandlers:
         end_time: Optional[str],
         controller_id: Optional[str],
         sensor_id: Optional[str],
-        zone: Optional[str],
         parameter: Optional[str],
         limit: Optional[int]
     ) -> HistoricalQueryResponseModel:
@@ -409,7 +503,6 @@ class AnalyticsHandlers:
                 limit=limit,
                 controller_id=controller_id,
                 sensor_id=sensor_id,
-                zone=zone,
                 parameter=parameter
             )
 
@@ -445,5 +538,46 @@ class AnalyticsHandlers:
                 detail={
                     "error": "Internal server error",
                     "message": "An unexpected error occurred while retrieving historical data"
+                }
+            )
+
+    async def _handle_latest_measurement(
+        self,
+        controller_id: str
+    ) -> LatestMeasurementResponse:
+        """Handle latest measurement request."""
+        try:
+            # Get latest measurement from service
+            measurement = await self.analytics_service.get_latest_measurement(controller_id)
+
+            # Create response
+            response = LatestMeasurementResponse.from_measurement(controller_id, measurement)
+
+            # Log the result
+            if measurement:
+                self.logger.info(f"Latest measurement found for controller {controller_id}")
+            else:
+                self.logger.info(f"No recent measurements found for controller {controller_id}")
+
+            return response
+
+        except ExternalServiceError as e:
+            self.logger.error(f"External service error in latest measurement: {e}")
+            raise HTTPException(
+                status_code=502,
+                detail={
+                    "error": "External service unavailable",
+                    "message": f"Go backend service error: {e.message}",
+                    "service": e.service_name
+                }
+            )
+
+        except Exception as e:
+            self.logger.error(f"Unexpected error in latest measurement: {e}")
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "error": "Internal server error",
+                    "message": "An unexpected error occurred while retrieving latest measurement"
                 }
             )

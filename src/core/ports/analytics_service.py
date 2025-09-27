@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from typing import List, Optional
 from datetime import datetime
 
+from ..domain.measurement import Measurement
 from ..domain.analytics import (
     AnalyticsReport,
     MultiReportRequest,
@@ -119,4 +120,20 @@ class AnalyticsService(ABC):
         filters: HistoricalQueryFilter
     ) -> HistoricalQueryResponse:
         """Retrieve historical measurement data applying advanced filters."""
+        pass
+
+    @abstractmethod
+    async def get_latest_measurement(
+        self,
+        controller_id: str
+    ) -> Optional[Measurement]:
+        """
+        Get the most recent measurement for a specific controller.
+
+        Args:
+            controller_id: ID of the controller to get the latest measurement for
+
+        Returns:
+            The most recent Measurement object, or None if no data found in the last 10 minutes
+        """
         pass

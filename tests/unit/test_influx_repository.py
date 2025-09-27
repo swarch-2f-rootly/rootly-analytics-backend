@@ -86,7 +86,6 @@ class TestInfluxRepository:
         assert measurements[0].controller_id == "device-001"
         assert measurements[0].temperature == 25.5
         assert measurements[0].sensor_id == "sensor-123"
-        assert measurements[0].zone == "zone-1"
 
     @pytest.mark.asyncio
     async def test_get_measurements_no_data(self, repository, mock_influx_client):
@@ -205,7 +204,6 @@ class TestInfluxRepository:
             limit=100,
             interval="1h",
             sensor_id="sensor-1",
-            zone="zone-a",
             parameter="temperature"
         )
 
@@ -213,7 +211,6 @@ class TestInfluxRepository:
         repository.query_api.query.assert_called_once()
         called_query = repository.query_api.query.call_args[0][0]
         assert 'sensor_id' in called_query
-        assert 'zone' in called_query
         assert '_field' in called_query
         query_arg = repository.query_api.query.call_args[0][0]
 
@@ -269,7 +266,7 @@ class TestInfluxRepository:
             end_time=end_time
         )
 
-        assert 'range(start: 2024-01-01T00:00:00+00:00Z, stop: 2024-01-02T00:00:00+00:00Z)' in query
+        assert 'range(start: 2024-01-01T00:00:00Z, stop: 2024-01-02T00:00:00Z)' in query
 
     def test_build_flux_query_with_limit(self, repository):
         """Test Flux query building with limit."""
