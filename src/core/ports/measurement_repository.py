@@ -18,7 +18,9 @@ class MeasurementRepository(ABC):
         start_time: Optional[datetime] = None,
         end_time: Optional[datetime] = None,
         limit: Optional[int] = None,
-        interval: Optional[str] = None
+        interval: Optional[str] = None,
+        sensor_id: Optional[str] = None,
+        parameter: Optional[str] = None
     ) -> List[Measurement]:
         """
         Fetch measurements with optional filters.
@@ -29,6 +31,8 @@ class MeasurementRepository(ABC):
             end_time: End time for the query range
             limit: Maximum number of measurements to return
             interval: Time interval for data aggregation
+            sensor_id: Filter by sensor identifier
+            parameter: Filter by measurement parameter/field
 
         Returns:
             List of Measurement objects
@@ -44,7 +48,9 @@ class MeasurementRepository(ABC):
         controllers: List[str],
         start_time: Optional[datetime] = None,
         end_time: Optional[datetime] = None,
-        limit: Optional[int] = None
+        limit: Optional[int] = None,
+        sensor_id: Optional[str] = None,
+        parameter: Optional[str] = None
     ) -> List[Measurement]:
         """
         Fetch measurements for multiple controllers.
@@ -58,6 +64,25 @@ class MeasurementRepository(ABC):
         Returns:
             List of Measurement objects
             
+        Raises:
+            RepositoryError: If data access fails
+        """
+        pass
+
+    @abstractmethod
+    async def get_latest_measurement(
+        self,
+        controller_id: str
+    ) -> Optional[Measurement]:
+        """
+        Get the most recent measurement for a specific controller.
+
+        Args:
+            controller_id: ID of the controller to get the latest measurement for
+
+        Returns:
+            The most recent Measurement object, or None if no data found in the last 10 minutes
+
         Raises:
             RepositoryError: If data access fails
         """

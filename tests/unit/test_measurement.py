@@ -62,12 +62,12 @@ class TestMeasurement:
                 timestamp=timestamp
             )
 
-    @pytest.mark.parametrize("invalid_soil_humidity", [-0.1, 1.1, -1.0, 2.0])
+    @pytest.mark.parametrize("invalid_soil_humidity", [-0.1, 101.0, -1.0, 150.0])
     def test_measurement_soil_humidity_validation(self, invalid_soil_humidity):
         """Test soil humidity validation."""
         timestamp = datetime.now(timezone.utc)
 
-        with pytest.raises(ValueError, match="soil_humidity must be between 0 and 1"):
+        with pytest.raises(ValueError, match="soil_humidity must be between 0 and 100"):
             Measurement(
                 controller_id="device-001",
                 timestamp=timestamp,

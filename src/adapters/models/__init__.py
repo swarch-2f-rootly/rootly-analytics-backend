@@ -7,22 +7,30 @@ from .models import (
     MetricResultModel,
     AnalyticsFilterModel,
     SingleMetricReportResponse,
+    MultiMetricReportRequest,
     MultiReportRequestModel,
     MultiReportResponseModel,
-    TrendDataPointModel,
-    TrendAnalysisResponse,
     ErrorResponse,
-    HealthResponse
+    HealthResponse,
+    HistoricalQueryResponseModel,
+    HistoricalDataPointModel,
+    HistoricalQueryFiltersModel,
+    SupportedMetricsResponse,
+    LatestMeasurementResponse
 )
 
 __all__ = [
     "MetricResultModel",
     "AnalyticsFilterModel",
     "SingleMetricReportResponse",
+    "MultiMetricReportRequest",
     "MultiReportRequestModel",
     "MultiReportResponseModel",
-    "TrendDataPointModel",
-    "TrendAnalysisResponse",
     "ErrorResponse",
-    "HealthResponse"
+    "HealthResponse",
+    "HistoricalQueryResponseModel",
+    "HistoricalDataPointModel",
+    "HistoricalQueryFiltersModel",
+    "SupportedMetricsResponse",
+    "LatestMeasurementResponse"
 ]

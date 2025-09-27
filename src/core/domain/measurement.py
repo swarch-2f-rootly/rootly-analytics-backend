@@ -15,6 +15,7 @@ class Measurement:
     air_humidity: Optional[float] = None
     temperature: Optional[float] = None
     light_intensity: Optional[float] = None
+    sensor_id: Optional[str] = None
 
     def __post_init__(self):
         """Validate measurement data after initialization."""
@@ -23,8 +24,8 @@ class Measurement:
 
         # Validate measurement ranges if values are provided
         if self.soil_humidity is not None:
-            if not 0 <= self.soil_humidity <= 1:
-                raise ValueError("soil_humidity must be between 0 and 1")
+            if not 0 <= self.soil_humidity <= 100:
+                raise ValueError("soil_humidity must be between 0 and 100")
 
         if self.air_humidity is not None:
             if not 0 <= self.air_humidity <= 100:
@@ -37,6 +38,9 @@ class Measurement:
         if self.light_intensity is not None:
             if self.light_intensity < 0:
                 raise ValueError("light_intensity must be non-negative")
+
+        if self.sensor_id is not None and not self.sensor_id.strip():
+            raise ValueError("sensor_id cannot be empty or whitespace")
 
     @property
     def has_temperature(self) -> bool:

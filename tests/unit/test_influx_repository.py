@@ -67,7 +67,9 @@ class TestInfluxRepository:
             "controller_id": "device-001",
             "_time": datetime.now(timezone.utc),
             "_field": "temperature",
-            "_value": 25.5
+            "_value": 25.5,
+            "sensor_id": "sensor-123",
+            "zone": "zone-1"
         }
         mock_record.get_time.return_value = datetime.now(timezone.utc)
         mock_record.get_field.return_value = "temperature"
@@ -83,6 +85,7 @@ class TestInfluxRepository:
         assert len(measurements) == 1
         assert measurements[0].controller_id == "device-001"
         assert measurements[0].temperature == 25.5
+        assert measurements[0].sensor_id == "sensor-123"
 
     @pytest.mark.asyncio
     async def test_get_measurements_no_data(self, repository, mock_influx_client):
@@ -112,7 +115,9 @@ class TestInfluxRepository:
                 "controller_id": "device-001",
                 "_time": base_time,
                 "_field": field,
-                "_value": value
+                "_value": value,
+                "sensor_id": "sensor-123",
+                "zone": "zone-1"
             }
             mock_record.get_time.return_value = base_time
             mock_record.get_field.return_value = field
@@ -144,7 +149,9 @@ class TestInfluxRepository:
             "controller_id": "device-001",
             "_time": datetime.now(timezone.utc),
             "_field": "temperature",
-            "_value": 25.0
+            "_value": 25.0,
+            "sensor_id": "sensor-001",
+            "zone": "zone-a"
         }
         mock_record1.get_time.return_value = datetime.now(timezone.utc)
         mock_record1.get_field.return_value = "temperature"
@@ -159,7 +166,9 @@ class TestInfluxRepository:
             "controller_id": "device-002",
             "_time": datetime.now(timezone.utc),
             "_field": "temperature",
-            "_value": 26.0
+            "_value": 26.0,
+            "sensor_id": "sensor-002",
+            "zone": "zone-b"
         }
         mock_record2.get_time.return_value = datetime.now(timezone.utc)
         mock_record2.get_field.return_value = "temperature"
@@ -193,11 +202,16 @@ class TestInfluxRepository:
             start_time=start_time,
             end_time=end_time,
             limit=100,
-            interval="1h"
+            interval="1h",
+            sensor_id="sensor-1",
+            parameter="temperature"
         )
 
         # Verify query was called
         repository.query_api.query.assert_called_once()
+        called_query = repository.query_api.query.call_args[0][0]
+        assert 'sensor_id' in called_query
+        assert '_field' in called_query
         query_arg = repository.query_api.query.call_args[0][0]
 
         # Verify query contains expected parameters
@@ -252,7 +266,7 @@ class TestInfluxRepository:
             end_time=end_time
         )
 
-        assert 'range(start: 2024-01-01T00:00:00+00:00Z, stop: 2024-01-02T00:00:00+00:00Z)' in query
+        assert 'range(start: 2024-01-01T00:00:00Z, stop: 2024-01-02T00:00:00Z)' in query
 
     def test_build_flux_query_with_limit(self, repository):
         """Test Flux query building with limit."""

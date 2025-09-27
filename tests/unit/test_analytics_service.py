@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from unittest.mock import MagicMock
 
 from src.core.services.analytics_service_impl import AnalyticsServiceImpl
-from src.core.domain.analytics import AnalyticsFilter, MetricResult
+from src.core.domain.analytics import AnalyticsFilter, MetricResult, HistoricalQueryFilter
 from src.core.ports.exceptions import InvalidMetricError, InsufficientDataError
 
 
@@ -190,9 +190,12 @@ class TestAnalyticsServiceImpl:
         # Should contain various temperature metrics
         metric_names = [r.metric_name for r in result.metrics]
 
-        assert "temperatura_promedio" in metric_names
-        assert "temperatura_minima" in metric_names
-        assert "temperatura_maxima" in metric_names
+        assert "temperature_average" in metric_names
+        assert "temperature_minimum" in metric_names
+        assert "temperature_maximum" in metric_names
+        assert "temperature_trend_change" in metric_names
+        assert "temperature_trend_percent" in metric_names
+        assert "temperature_trend_slope" in metric_names
 
     @pytest.mark.asyncio
     async def test_humidity_analytics_calculation(self, mock_measurement_repository, mock_logger, sample_measurements):
@@ -205,9 +208,12 @@ class TestAnalyticsServiceImpl:
         # Should contain humidity metrics
         metric_names = [r.metric_name for r in result.metrics]
 
-        assert "humedad_aire_promedio" in metric_names
-        assert "humedad_aire_minima" in metric_names
-        assert "humedad_aire_maxima" in metric_names
+        assert "air_humidity_average" in metric_names
+        assert "air_humidity_minimum" in metric_names
+        assert "air_humidity_maximum" in metric_names
+        assert "air_humidity_trend_change" in metric_names
+        assert "air_humidity_trend_percent" in metric_names
+        assert "air_humidity_trend_slope" in metric_names
 
     @pytest.mark.asyncio
     async def test_soil_humidity_analytics_calculation(self, mock_measurement_repository, mock_logger, sample_measurements):
@@ -220,9 +226,12 @@ class TestAnalyticsServiceImpl:
         # Should contain soil humidity metrics
         metric_names = [r.metric_name for r in result.metrics]
 
-        assert "humedad_tierra_promedio" in metric_names
-        assert "humedad_tierra_minima" in metric_names
-        assert "humedad_tierra_maxima" in metric_names
+        assert "soil_humidity_average" in metric_names
+        assert "soil_humidity_minimum" in metric_names
+        assert "soil_humidity_maximum" in metric_names
+        assert "soil_humidity_trend_change" in metric_names
+        assert "soil_humidity_trend_percent" in metric_names
+        assert "soil_humidity_trend_slope" in metric_names
 
     @pytest.mark.asyncio
     async def test_light_analytics_calculation(self, mock_measurement_repository, mock_logger, sample_measurements):
@@ -235,6 +244,47 @@ class TestAnalyticsServiceImpl:
         # Should contain light metrics
         metric_names = [r.metric_name for r in result.metrics]
 
-        assert "luminosidad_promedio" in metric_names
-        assert "luminosidad_minima" in metric_names
-        assert "luminosidad_maxima" in metric_names
+        assert "light_intensity_average" in metric_names
+        assert "light_intensity_minimum" in metric_names
+        assert "light_intensity_maximum" in metric_names
+        assert "light_intensity_trend_change" in metric_names
+        assert "light_intensity_trend_percent" in metric_names
+        assert "light_intensity_trend_slope" in metric_names
+
+    @pytest.mark.asyncio
+    async def test_query_historical_data_with_parameter(
+        self, mock_measurement_repository, mock_logger, sample_measurements
+    ):
+        """Test historical data query filtered by parameter."""
+        service = AnalyticsServiceImpl(mock_measurement_repository)
+
+        filters = HistoricalQueryFilter(
+            parameter="temperature"
+        )
+
+        response = await service.query_historical_data(filters)
+
+        assert response.total_points > 0
+        for point in response.data_points:
+            assert point.parameter == "temperature"
+
+        mock_measurement_repository.get_measurements.assert_called_with(
+            controller_id=None,
+            start_time=None,
+            end_time=None,
+            limit=None,
+            sensor_id=None,
+            parameter="temperature"
+        )
+
+    @pytest.mark.asyncio
+    async def test_query_historical_data_invalid_parameter(
+        self, mock_measurement_repository, mock_logger
+    ):
+        """Historical data query with unsupported parameter should error."""
+        service = AnalyticsServiceImpl(mock_measurement_repository)
+
+        filters = HistoricalQueryFilter(parameter="invalid")
+
+        with pytest.raises(InvalidMetricError):
+            await service.query_historical_data(filters)
