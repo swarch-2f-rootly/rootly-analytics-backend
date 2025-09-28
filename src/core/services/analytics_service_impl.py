@@ -80,6 +80,10 @@ class AnalyticsServiceImpl(AnalyticsService):
             metric_name, measurements, controller_id
         )
 
+        # Check if we have data for the requested metric
+        if not metric_results:
+            raise InsufficientDataError(f"No {metric_name} data available for controller {controller_id}")
+
         return AnalyticsReport(
             controller_id=controller_id,
             metrics=metric_results,
@@ -113,6 +117,10 @@ class AnalyticsServiceImpl(AnalyticsService):
                                 metric_name, measurements, controller_id
                             )
                             all_metrics.extend(metric_results)
+
+                    # Check if we have data for at least one of the requested metrics
+                    if not all_metrics:
+                        raise InsufficientDataError(f"No data available for requested metrics in controller {controller_id}")
 
                     reports[controller_id] = AnalyticsReport(
                         controller_id=controller_id,

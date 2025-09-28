@@ -76,6 +76,37 @@ class TestAnalyticsServiceImpl:
             await service.generate_single_metric_report("temperature", "device-001", filters)
 
     @pytest.mark.asyncio
+    async def test_generate_single_metric_report_no_data_for_requested_metric(self, mock_measurement_repository, mock_logger):
+        """Test generating report when measurements exist but don't contain data for the requested metric."""
+        from src.core.domain.measurement import Measurement
+        from datetime import datetime
+
+        # Create measurements with only soil_humidity data (no temperature)
+        measurements = [
+            Measurement(
+                controller_id="device-001",
+                timestamp=datetime.now(),
+                temperature=None,  # No temperature data
+                air_humidity=None,
+                soil_humidity=50.0,
+                light_intensity=None,
+                sensor_id="sensor-1"
+            )
+        ]
+
+        mock_measurement_repository.get_measurements.return_value = measurements
+
+        service = AnalyticsServiceImpl(mock_measurement_repository)
+
+        filters = AnalyticsFilter()
+
+        # Should raise InsufficientDataError when requesting temperature but only soil_humidity data exists
+        with pytest.raises(InsufficientDataError) as exc_info:
+            await service.generate_single_metric_report("temperature", "device-001", filters)
+
+        assert "No temperature data available" in str(exc_info.value)
+
+    @pytest.mark.asyncio
     async def test_generate_multi_report_valid_request(self, mock_measurement_repository, mock_logger, sample_measurements):
         """Test generating multi-controller report."""
         service = AnalyticsServiceImpl(mock_measurement_repository)
