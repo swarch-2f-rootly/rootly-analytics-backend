@@ -161,10 +161,10 @@ query {
 query SingleMetricReport {
   getSingleMetricReport(
     metricName: "temperature"
-    controllerId: "controller-123"
+    controllerId: "FARM-001"
     filters: {
-      startTime: "2024-01-01T00:00:00Z"
-      endTime: "2024-01-31T23:59:59Z"
+      startTime: "2025-08-01T00:00:00Z"
+      endTime: "2025-09-30T23:59:59Z"
       limit: 100
     }
   ) {
@@ -188,11 +188,11 @@ query SingleMetricReport {
 query MultiMetricReport {
   getMultiMetricReport(
     input: {
-      controllers: ["controller-123", "controller-456"]
+      controllers: ["FARM-001", "FARM-002"]
       metrics: ["temperature", "humidity", "light_intensity"]
       filters: {
-        startTime: "2024-01-01T00:00:00Z"
-        endTime: "2024-01-31T23:59:59Z"
+        startTime: "2025-08-01T00:00:00Z"
+        endTime: "2025-09-30T23:59:59Z"
         limit: 50
       }
     }
@@ -223,9 +223,9 @@ query TrendAnalysis {
   getTrendAnalysis(
     input: {
       metricName: "temperature"
-      controllerId: "controller-123"
-      startTime: "2024-01-01T00:00:00Z"
-      endTime: "2024-01-07T23:59:59Z"
+      controllerId: "FARM-001"
+      startTime: "2025-08-01T00:00:00Z"
+      endTime: "2025-09-30T23:59:59Z"
       interval: "1h"
     }
   ) {
