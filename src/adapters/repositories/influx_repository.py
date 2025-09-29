@@ -95,8 +95,19 @@ class InfluxRepository(MeasurementRepository):
             return measurements
 
         except Exception as e:
-            self.logger.error(f"Error fetching measurements from InfluxDB: {e}")
-            raise RepositoryError("Failed to fetch measurements from InfluxDB", e)
+            # Provide more specific error messages based on the type of error
+            if "401" in str(e) or "unauthorized" in str(e).lower():
+                error_msg = f"Authentication failed with InfluxDB. Please check your token configuration. URL: {self.url}, Org: {self.org}, Bucket: {self.bucket}"
+                self.logger.error(error_msg)
+                self.logger.error(f"Token configured: {'Yes' if self.token and self.token != 'your-influxdb-token-here' else 'No/Default'}")
+                raise RepositoryError(error_msg, e)
+            elif "connection" in str(e).lower() or "refused" in str(e).lower():
+                error_msg = f"Cannot connect to InfluxDB at {self.url}. Please ensure InfluxDB is running and accessible."
+                self.logger.error(error_msg)
+                raise RepositoryError(error_msg, e)
+            else:
+                self.logger.error(f"Error fetching measurements from InfluxDB: {e}")
+                raise RepositoryError("Failed to fetch measurements from InfluxDB", e)
 
     async def get_measurements_by_controllers(
         self,
@@ -219,7 +230,14 @@ class InfluxRepository(MeasurementRepository):
             return True
 
         except Exception as e:
-            self.logger.warning(f"InfluxDB health check failed: {e}")
+            if "401" in str(e) or "unauthorized" in str(e).lower():
+                self.logger.error(f"InfluxDB health check failed - Authentication error: {e}")
+                self.logger.error(f"Check credentials - URL: {self.url}, Org: {self.org}, Bucket: {self.bucket}")
+            elif "connection" in str(e).lower() or "refused" in str(e).lower():
+                self.logger.error(f"InfluxDB health check failed - Connection error: {e}")
+                self.logger.error(f"Check if InfluxDB is running at: {self.url}")
+            else:
+                self.logger.warning(f"InfluxDB health check failed: {e}")
             return False
 
     def close(self):

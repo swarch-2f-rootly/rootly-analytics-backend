@@ -4,6 +4,7 @@ Sets up FastAPI app with dependency injection and error handling.
 """
 
 from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import logging
 import os
@@ -13,6 +14,7 @@ from datetime import datetime
 from .core.services.analytics_service_impl import AnalyticsServiceImpl
 from .adapters.repositories.influx_repository import InfluxRepository
 from .adapters.handlers.analytics_handlers import AnalyticsHandlers
+from .adapters.graphql.schema import create_graphql_router
 from .core.ports.exceptions import (
     AnalyticsServiceError,
     InvalidMetricError,
@@ -86,9 +88,19 @@ def get_analytics_service(
 # Setup analytics handlers
 analytics_service = get_analytics_service()
 analytics_handlers = AnalyticsHandlers(analytics_service)
+influx_repository = get_influx_repository()
 
-# Include analytics routes
+# Include REST API routes
 app.include_router(analytics_handlers.router)
+
+# Setup and include GraphQL
+graphql_router = create_graphql_router(
+    analytics_service=analytics_service,
+    influx_repository=influx_repository,
+    playground_enabled=config.GRAPHQL_PLAYGROUND_ENABLED,
+    introspection_enabled=config.GRAPHQL_INTROSPECTION_ENABLED
+)
+app.include_router(graphql_router, prefix=config.GRAPHQL_ENDPOINT, tags=["GraphQL"])
 
 # Register error handlers
 register_error_handlers(app)
@@ -106,7 +118,9 @@ async def root():
             "docs": config.DOCS_URL,
             "redoc": config.REDOC_URL,
             "health": "/api/v1/analytics/health",
-            "metrics": "/api/v1/analytics/metrics"
+            "metrics": "/api/v1/analytics/metrics",
+            "graphql": config.GRAPHQL_ENDPOINT,
+            "playground": config.GRAPHQL_PLAYGROUND_ENDPOINT if config.GRAPHQL_PLAYGROUND_ENABLED else None
         }
     }
 
@@ -145,7 +159,7 @@ if __name__ == "__main__":
 
     # Run the application
     uvicorn.run(
-        "main:app",
+        "src.main:app",
         host=config.HOST,
         port=config.PORT,
         reload=config.RELOAD,
