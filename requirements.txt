@@ -12,6 +12,9 @@ numpy==1.25.2
 # Data validation and serialization
 pydantic==2.5.0
 
+# GraphQL implementation
+strawberry-graphql[fastapi]==0.213.0
+
 # Environment variable management
 python-dotenv==1.0.0
 

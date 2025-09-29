@@ -34,6 +34,12 @@ class Config:
     DOCS_URL: str = "/docs"
     REDOC_URL: str = "/redoc"
 
+    # GraphQL configuration
+    GRAPHQL_PLAYGROUND_ENABLED: bool = os.getenv("GRAPHQL_PLAYGROUND_ENABLED", "true").lower() == "true"
+    GRAPHQL_INTROSPECTION_ENABLED: bool = os.getenv("GRAPHQL_INTROSPECTION_ENABLED", "true").lower() == "true"
+    GRAPHQL_ENDPOINT: str = "/api/v1/graphql"
+    GRAPHQL_PLAYGROUND_ENDPOINT: str = "/api/v1/graphql/playground"
+
     # Server configuration
     HOST: str = os.getenv("HOST", "0.0.0.0")
     PORT: int = int(os.getenv("PORT", "8000"))

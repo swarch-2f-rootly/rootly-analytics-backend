@@ -190,6 +190,38 @@ class AnalyticsHandlers:
                 limit=limit
             )
 
+        @self.router.get(
+            "/health",
+            summary="Analytics Service Health Check",
+            description="Check the health status of the Analytics Service and its dependencies"
+        )
+        async def analytics_health_check():
+            """Analytics service specific health check."""
+            self.logger.info("GET /health called")
+            try:
+                # Get influx repository from the analytics service
+                influx_repo = self.analytics_service.measurement_repository
+                influxdb_healthy = await influx_repo.health_check()
+
+                return {
+                    "status": "healthy" if influxdb_healthy else "degraded",
+                    "service": "analytics",
+                    "influxdb": "healthy" if influxdb_healthy else "unhealthy",
+                    "influxdb_url": influx_repo.url if hasattr(influx_repo, 'url') else "unknown",
+                    "timestamp": str(datetime.now().isoformat())
+                }
+            except Exception as e:
+                self.logger.error(f"Health check failed: {e}")
+                raise HTTPException(
+                    status_code=503,
+                    detail={
+                        "status": "unhealthy",
+                        "service": "analytics",
+                        "error": str(e),
+                        "timestamp": str(datetime.now().isoformat())
+                    }
+                )
+
     async def _handle_single_metric_report(
         self,
         metric_name: str,
