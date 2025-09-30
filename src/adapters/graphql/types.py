@@ -13,8 +13,12 @@ from ...core.domain.analytics import (
     TrendDataPoint as DomainTrendDataPoint,
     TrendAnalysis as DomainTrendAnalysis,
     MultiReportResponse as DomainMultiReportResponse,
-    AnalyticsFilter as DomainAnalyticsFilter
+    AnalyticsFilter as DomainAnalyticsFilter,
+    HistoricalDataPoint as DomainHistoricalDataPoint,
+    HistoricalQueryResponse as DomainHistoricalQueryResponse,
+    HistoricalQueryFilter as DomainHistoricalQueryFilter
 )
+from ...core.domain.measurement import Measurement
 
 
 @strawberry.type
@@ -175,3 +179,153 @@ class TrendAnalysisInput:
     start_time: str
     end_time: str
     interval: str = "1h"
+
+
+@strawberry.input
+class HistoricalQueryInput:
+    """GraphQL input type for historical measurements query."""
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    controller_id: Optional[str] = None
+    sensor_id: Optional[str] = None
+    parameter: Optional[str] = None
+    limit: Optional[int] = None
+
+
+@strawberry.type
+class LatestMeasurementResponse:
+    """GraphQL type for latest measurement response."""
+    controller_id: str
+    measurement: Optional[MetricResult]
+    status: str
+    last_checked: datetime
+    data_age_minutes: Optional[float]
+
+    @classmethod
+    def from_measurement(
+        cls,
+        controller_id: str,
+        measurement: Optional[Measurement]
+    ) -> "LatestMeasurementResponse":
+        """Create response from a measurement or None, following REST API logic."""
+        if measurement:
+            # Create a metric result with basic measurement info
+            # Since this is "latest measurement", we'll use temperature as the primary metric
+            # or whichever is available
+            primary_value = None
+            primary_unit = None
+            primary_name = "measurement"
+
+            if measurement.has_temperature:
+                primary_value = measurement.temperature
+                primary_unit = "°C"
+                primary_name = "temperature"
+            elif measurement.has_humidity_air:
+                primary_value = measurement.air_humidity
+                primary_unit = "%"
+                primary_name = "air_humidity"
+            elif measurement.has_humidity_soil:
+                primary_value = measurement.soil_humidity
+                primary_unit = ""
+                primary_name = "soil_humidity"
+            elif measurement.has_light:
+                primary_value = measurement.light_intensity
+                primary_unit = "lux"
+                primary_name = "light_intensity"
+
+            if primary_value is not None:
+                domain_metric_result = DomainMetricResult(
+                    metric_name=primary_name,
+                    value=primary_value,
+                    unit=primary_unit,
+                    calculated_at=measurement.timestamp,
+                    controller_id=controller_id,
+                    description="Latest measurement"
+                )
+                metric_result = MetricResult.from_domain(domain_metric_result)
+
+                # Calculate data age
+                data_age = (datetime.now() - measurement.timestamp).total_seconds() / 60
+
+                return cls(
+                    controller_id=controller_id,
+                    measurement=metric_result,
+                    status="data",
+                    last_checked=datetime.now(),
+                    data_age_minutes=round(data_age, 2)
+                )
+
+        # No data case
+        return cls(
+            controller_id=controller_id,
+            measurement=None,
+            status="no_data",
+            last_checked=datetime.now(),
+            data_age_minutes=None
+        )
+
+
+@strawberry.type
+class HistoricalDataPoint:
+    """GraphQL type for historical measurement data points."""
+    timestamp: datetime
+    controller_id: str
+    parameter: str
+    value: float
+    sensor_id: Optional[str] = None
+
+    @classmethod
+    def from_domain(cls, domain_point: DomainHistoricalDataPoint) -> "HistoricalDataPoint":
+        """Convert domain HistoricalDataPoint to GraphQL type."""
+        return cls(
+            timestamp=domain_point.timestamp,
+            controller_id=domain_point.controller_id,
+            parameter=domain_point.parameter,
+            value=domain_point.value,
+            sensor_id=domain_point.sensor_id
+        )
+
+
+@strawberry.type
+class HistoricalQueryResponse:
+    """GraphQL type for historical query responses."""
+    data_points: List[HistoricalDataPoint]
+    generated_at: datetime
+    total_points: int
+    filters_applied: "HistoricalQueryFilters"
+
+    @classmethod
+    def from_domain(cls, domain_response: DomainHistoricalQueryResponse) -> "HistoricalQueryResponse":
+        """Convert domain HistoricalQueryResponse to GraphQL type."""
+        return cls(
+            data_points=[HistoricalDataPoint.from_domain(dp) for dp in domain_response.data_points],
+            generated_at=domain_response.generated_at,
+            total_points=domain_response.total_points,
+            filters_applied=HistoricalQueryFilters.from_domain(domain_response.filters_applied)
+        )
+
+
+@strawberry.type
+class HistoricalQueryFilters:
+    """GraphQL type for historical query filters."""
+    start_time: Optional[datetime] = None
+    end_time: Optional[datetime] = None
+    limit: Optional[int] = None
+    controller_id: Optional[str] = None
+    sensor_id: Optional[str] = None
+    parameter: Optional[str] = None
+
+    @classmethod
+    def from_domain(cls, domain_filters: DomainHistoricalQueryFilter) -> "HistoricalQueryFilters":
+        """Convert domain HistoricalQueryFilter to GraphQL type."""
+        return cls(
+            start_time=domain_filters.start_time,
+            end_time=domain_filters.end_time,
+            limit=domain_filters.limit,
+            controller_id=domain_filters.controller_id,
+            sensor_id=domain_filters.sensor_id,
+            parameter=domain_filters.parameter
+        )
+
+
+# Input types for GraphQL mutations and queries

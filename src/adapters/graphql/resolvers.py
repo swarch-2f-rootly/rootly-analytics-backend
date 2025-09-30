@@ -27,7 +27,10 @@ from .types import (
     HealthStatus,
     AnalyticsFilters,
     MultiMetricReportInput,
-    TrendAnalysisInput
+    TrendAnalysisInput,
+    LatestMeasurementResponse,
+    HistoricalQueryResponse,
+    HistoricalQueryInput
 )
 
 
@@ -90,6 +93,94 @@ class Query:
                 influxdb_url=_influx_repository.url if _influx_repository else "unknown",
                 timestamp=datetime.now().isoformat()
             )
+
+    @strawberry.field
+    async def get_latest_measurement(self, controller_id: str) -> LatestMeasurementResponse:
+        """
+        Get the most recent measurement for a specific controller from the last 10 minutes.
+
+        Args:
+            controller_id: ID of the controller to get the latest measurement for
+
+        Returns:
+            LatestMeasurementResponse with the most recent measurement data or null if no data
+
+        Raises:
+            Exception: If the query fails
+        """
+        _logger.info(f"GraphQL query: getLatestMeasurement - controller: {controller_id}")
+
+        try:
+            if _analytics_service is None:
+                raise Exception("Analytics service not initialized")
+
+            # Call the analytics service using the same port as REST API
+            measurement = await _analytics_service.get_latest_measurement(controller_id)
+
+            # Create response using the same logic as REST API
+            response = LatestMeasurementResponse.from_measurement(controller_id, measurement)
+
+            # Log the result
+            if measurement:
+                _logger.info(f"Latest measurement found for controller {controller_id}")
+            else:
+                _logger.info(f"No recent measurements found for controller {controller_id}")
+
+            return response
+
+        except Exception as e:
+            _logger.error(f"Unexpected error in getLatestMeasurement: {e}")
+            raise Exception(f"Failed to get latest measurement: {str(e)}")
+
+    @strawberry.field
+    async def get_historical_measurements(self, input: HistoricalQueryInput) -> HistoricalQueryResponse:
+        """
+        Query historical measurement data using advanced filters.
+
+        Args:
+            input: HistoricalQueryInput with optional filters for the query
+
+        Returns:
+            HistoricalQueryResponse with filtered historical measurement data
+
+        Raises:
+            Exception: If the query fails
+        """
+        _logger.info(f"GraphQL query: getHistoricalMeasurements - filters: {input}")
+
+        try:
+            if _analytics_service is None:
+                raise Exception("Analytics service not initialized")
+
+            # Convert GraphQL input to domain filters
+            # Parse datetime strings
+            start_time = None
+            end_time = None
+
+            if input.start_time:
+                start_time = datetime.fromisoformat(input.start_time.replace('Z', '+00:00'))
+            if input.end_time:
+                end_time = datetime.fromisoformat(input.end_time.replace('Z', '+00:00'))
+
+            # Create domain filters
+            domain_filters = HistoricalQueryFilter(
+                start_time=start_time,
+                end_time=end_time,
+                limit=input.limit,
+                controller_id=input.controller_id,
+                sensor_id=input.sensor_id,
+                parameter=input.parameter
+            )
+
+            # Call the analytics service using the same port as REST API
+            domain_response = await _analytics_service.query_historical_data(domain_filters)
+
+            # Convert domain response to GraphQL type
+            return HistoricalQueryResponse.from_domain(domain_response)
+
+        except Exception as e:
+            _logger.error(f"Unexpected error in getHistoricalMeasurements: {e}")
+            raise Exception(f"Failed to query historical measurements: {str(e)}")
 
     @strawberry.field
     async def get_single_metric_report(

@@ -24,8 +24,8 @@ class Config:
     INFLUXDB_BUCKET: str = os.getenv("INFLUXDB_BUCKET", "rootly-bucket")
     INFLUXDB_ORG: str = os.getenv("INFLUXDB_ORG", "rootly-org")
 
-    # CORS configuration
-    CORS_ORIGINS: List[str] = os.getenv("CORS_ORIGINS", "*").split(",")
+    # CORS configuration - Allow all origins for maximum compatibility
+    CORS_ORIGINS: List[str] = ["*"]
 
     # Application configuration
     APP_TITLE: str = "rootly Analytics Service"

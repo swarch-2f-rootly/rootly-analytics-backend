@@ -30,32 +30,7 @@ src/
 └── main.py                # Punto de entrada de la aplicación
 ```
 
-## 📊 Métricas Analíticas Implementadas
-
-### 1. **Growing Degree Days (GDD)**
-- **Propósito**: Predice etapas de desarrollo vegetal
-- **Fórmula**: `GDD = (T_max + T_min) / 2 - T_base`
-
-### 2. **Punto de Rocío (Dew Point)**
-- **Propósito**: Temperatura de condensación del vapor de agua
-- **Fórmula**: `Td = 243.12 * (ln(RH/100) + (17.62 * T) / (243.12 + T)) / (17.62 - (ln(RH/100) + (17.62 * T) / (243.12 + T)))`
-
-### 3. **Water Deficit Index (WDI)**
-- **Propósito**: Indicador de estrés hídrico del cultivo
-- **Fórmula**: `WDI = ((Moisture_Max - Moisture_Actual) / (Moisture_Max - Moisture_Min)) * 100`
-
-### 4. **Daily Light Integral (DLI)**
-- **Propósito**: Radiación fotosintética total diaria
-- **Fórmula**: `DLI = (Average_Light_Reading * 3600 * 24) / 1000000`
-
-### 5. **Vapor Pressure Deficit (VPD)**
-- **Propósito**: Indicador clave de transpiración vegetal
-- **Fórmulas**: 
-  - `SVP = 0.6108 * exp((17.27 * T) / (T + 237.3))`
-  - `AVP = (RH / 100) * SVP`
-  - `VPD = SVP - AVP`
-
-## 🚀 API Documentation
+##  API Documentation
 
 El servicio expone dos tipos de APIs para máxima flexibilidad:
 
@@ -64,7 +39,7 @@ El servicio expone dos tipos de APIs para máxima flexibilidad:
 
 ---
 
-## 📡 REST API Endpoints
+## REST API Endpoints
 
 ### 1. Reporte de Métrica Individual
 ```
@@ -123,7 +98,7 @@ Retorna la lista de métricas disponibles: `["temperatura", "humedad_aire", "hum
 
 ---
 
-## 🎯 GraphQL API
+## GraphQL API
 
 La API GraphQL está disponible en `/api/v1/graphql` y proporciona consultas flexibles y tipadas.
 
@@ -156,7 +131,28 @@ query {
 }
 ```
 
-#### 3. **Reporte de Métrica Individual**
+#### 3. **Última Medición de Controlador**
+```graphql
+query GetLatestMeasurement {
+  getLatestMeasurement(controllerId: "FARM-001") {
+    controllerId
+    status
+    lastChecked
+    dataAgeMinutes
+    measurement {
+      metricName
+      value
+      unit
+      calculatedAt
+      controllerId
+      description
+    }
+  }
+}
+```
+**Descripción**: Obtiene la medición más reciente para un controlador específico de los últimos 10 minutos. Retorna información sobre la frescura de los datos y la medición primaria disponible.
+
+#### 4. **Reporte de Métrica Individual**
 ```graphql
 query SingleMetricReport {
   getSingleMetricReport(
@@ -183,7 +179,7 @@ query SingleMetricReport {
 }
 ```
 
-#### 4. **Reporte Multi-Métrica**
+#### 5. **Reporte Multi-Métrica**
 ```graphql
 query MultiMetricReport {
   getMultiMetricReport(
@@ -217,7 +213,7 @@ query MultiMetricReport {
 }
 ```
 
-#### 5. **Análisis de Tendencias**
+#### 6. **Análisis de Tendencias**
 ```graphql
 query TrendAnalysis {
   getTrendAnalysis(
@@ -245,6 +241,40 @@ query TrendAnalysis {
   }
 }
 ```
+
+#### 7. **consultas de mediciones históricas**
+```graphql
+query gethistoricalmeasurements {
+  gethistoricalmeasurements(
+    input: {
+      controllerid: "farm-001"
+      parameter: "temperature"
+      starttime: "2025-08-01t00:00:00z"
+      endtime: "2025-09-30t23:59:59z"
+      limit: 100
+    }
+  ) {
+    datapoints {
+      timestamp
+      controllerid
+      parameter
+      value
+      sensorid
+    }
+    generatedat
+    totalpoints
+    filtersapplied {
+      starttime
+      endtime
+      limit
+      controllerid
+      sensorid
+      parameter
+    }
+  }
+}
+```
+**Descripción**: Consulta mediciones históricas aplicando filtros avanzados. Permite filtrar por controlador, sensor, parámetro, rango de tiempo y límite de resultados.
 
 ### **Cómo Probar GraphQL**
 
@@ -323,6 +353,54 @@ type TrendAnalysis {
 }
 ```
 
+#### **LatestMeasurementResponse**
+```graphql
+type LatestMeasurementResponse {
+  controllerId: String!
+  measurement: MetricResult
+  status: String!
+  lastChecked: DateTime!
+  dataAgeMinutes: Float
+}
+```
+**Descripción**: Respuesta que contiene la última medición disponible para un controlador. El campo `measurement` puede ser `null` si no hay datos recientes. El campo `status` indica si se encontraron datos ("data") o no ("no_data").
+
+#### **HistoricalDataPoint**
+```graphql
+type HistoricalDataPoint {
+  timestamp: DateTime!
+  controllerId: String!
+  parameter: String!
+  value: Float!
+  sensorId: String
+}
+```
+**Descripción**: Punto de datos individual de una medición histórica. Contiene la marca de tiempo, controlador, parámetro medido, valor y opcionalmente el ID del sensor.
+
+#### **HistoricalQueryResponse**
+```graphql
+type HistoricalQueryResponse {
+  dataPoints: [HistoricalDataPoint!]!
+  generatedAt: DateTime!
+  totalPoints: Int!
+  filtersApplied: HistoricalQueryFilters!
+}
+```
+**Descripción**: Respuesta completa de una consulta histórica que incluye la lista de puntos de datos, timestamp de generación, conteo total y filtros aplicados.
+
+#### **HistoricalQueryFilters**
+```graphql
+type HistoricalQueryFilters {
+  startTime: DateTime
+  endTime: DateTime
+  limit: Int
+  controllerId: String
+  sensorId: String
+  parameter: String
+}
+```
+**Descripción**: Filtros aplicados en una consulta histórica. Todos los campos son opcionales y permiten filtrar los resultados por diferentes criterios.
+
 ### **Inputs GraphQL**
 
 #### **AnalyticsFilterInput**
@@ -353,6 +431,19 @@ input TrendAnalysisInput {
   interval: String
 }
 ```
+
+#### **HistoricalQueryInput**
+```graphql
+input HistoricalQueryInput {
+  startTime: DateTime
+  endTime: DateTime
+  controllerId: String
+  sensorId: String
+  parameter: String
+  limit: Int
+}
+```
+**Descripción**: Input para consultas históricas. Permite especificar filtros opcionales para refinar la búsqueda de mediciones históricas.
 
 ---
 
@@ -410,7 +501,7 @@ El servicio se configura mediante variables de entorno:
 | `INFLUXDB_TOKEN` | Token de autenticación InfluxDB | `your-influxdb-token-here` |
 | `INFLUXDB_BUCKET` | Bucket de datos en InfluxDB | `rootly-bucket` |
 | `INFLUXDB_ORG` | Organización en InfluxDB | `rootly-org` |
-| `CORS_ORIGINS` | Orígenes permitidos para CORS | `*` |
+| `CORS_ORIGINS` | Orígenes permitidos para CORS (usa `*` para permitir todos) | `*` |
 | `HOST` | Host del servidor | `0.0.0.0` |
 | `PORT` | Puerto del servidor | `8000` |
 | `LOG_LEVEL` | Nivel de logging | `info` |
@@ -434,7 +525,7 @@ GRAPHQL_PLAYGROUND_ENABLED=true
 GRAPHQL_INTROSPECTION_ENABLED=true
 
 # CORS Configuration
-CORS_ORIGINS=http://localhost:3000,http://localhost:8080,http://localhost:8000,*
+CORS_ORIGINS=*
 
 # Logging Configuration
 LOG_LEVEL=INFO
