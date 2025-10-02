@@ -5,7 +5,7 @@ These models handle the conversion between HTTP and domain objects.
 
 from pydantic import BaseModel, Field, validator
 from typing import List, Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 
 from ...core.domain.measurement import Measurement
 from ...core.domain.analytics import (
@@ -290,7 +290,7 @@ class LatestMeasurementResponse(BaseModel):
                 metric_model = MetricResultModel.from_domain(metric_result)
 
                 # Calculate data age
-                data_age = (datetime.now() - measurement.timestamp).total_seconds() / 60
+                data_age = (datetime.now(timezone.utc) - measurement.timestamp).total_seconds() / 60
 
                 return cls(
                     controller_id=controller_id,

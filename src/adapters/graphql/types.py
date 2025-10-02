@@ -5,7 +5,7 @@ Strawberry GraphQL type definitions based on domain entities.
 
 import strawberry
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 from ...core.domain.analytics import (
     MetricResult as DomainMetricResult,
@@ -245,13 +245,13 @@ class LatestMeasurementResponse:
                 metric_result = MetricResult.from_domain(domain_metric_result)
 
                 # Calculate data age
-                data_age = (datetime.now() - measurement.timestamp).total_seconds() / 60
+                data_age = (datetime.now(timezone.utc) - measurement.timestamp).total_seconds() / 60
 
                 return cls(
                     controller_id=controller_id,
                     measurement=metric_result,
                     status="data",
-                    last_checked=datetime.now(),
+                    last_checked=datetime.now(timezone.utc),
                     data_age_minutes=round(data_age, 2)
                 )
 
@@ -260,7 +260,7 @@ class LatestMeasurementResponse:
             controller_id=controller_id,
             measurement=None,
             status="no_data",
-            last_checked=datetime.now(),
+            last_checked=datetime.now(timezone.utc),
             data_age_minutes=None
         )
 
