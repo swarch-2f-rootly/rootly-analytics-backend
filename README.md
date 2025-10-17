@@ -90,7 +90,21 @@ GET /api/v1/analytics/historical
 - `parameter`: Parámetro a consultar (`temperature`, `soil_humidity`, etc.)
 - `limit`: Número máximo de registros a retornar (1-10000)
 
-### 5. Métricas Soportadas
+### 5. Consultas Históricas Promediadas
+```
+GET /api/v1/analytics/historical/averages
+```
+**Parámetros de consulta:**
+- `average_interval` (requerido): Intervalo de promedio en minutos. Valores soportados: `15`, `30`, `60`, `120`, `360`, `720`
+- `start_time` / `end_time`: Rango de fechas en formato ISO 8601 (opcional)
+- `controller_id`: Identificador del controlador (opcional)
+- `sensor_id`: Identificador del sensor (opcional)
+- `parameter`: Parámetro a promediar (`temperature`, `soil_humidity`, etc.) (opcional)
+- `limit`: Número máximo de registros considerados antes de promediar (1-10000) (opcional)
+
+**Respuesta:** Lista de intervalos con el promedio calculado, la cantidad de mediciones usadas y las marcas de tiempo de inicio/fin del intervalo. Siempre que el rango solicitado abarque más de un día, la respuesta incluirá valores adicionales conforme a los intervalos seleccionados.
+
+### 6. Métricas Soportadas
 ```
 GET /api/v1/analytics/metrics
 ```

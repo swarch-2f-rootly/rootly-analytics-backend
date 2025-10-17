@@ -10,7 +10,8 @@ from ..domain.analytics import (
     TrendAnalysis,
     AnalyticsFilter,
     HistoricalQueryResponse,
-    HistoricalQueryFilter
+    HistoricalQueryFilter,
+    HistoricalAveragesResponse
 )
 
 
@@ -120,6 +121,15 @@ class AnalyticsService(ABC):
         filters: HistoricalQueryFilter
     ) -> HistoricalQueryResponse:
         """Retrieve historical measurement data applying advanced filters."""
+        pass
+
+    @abstractmethod
+    async def query_historical_averages(
+        self,
+        filters: HistoricalQueryFilter,
+        average_interval: int
+    ) -> HistoricalAveragesResponse:
+        """Retrieve averaged historical measurements for the specified interval."""
         pass
 
     @abstractmethod

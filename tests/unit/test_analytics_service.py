@@ -3,12 +3,13 @@ Unit tests for the AnalyticsService implementation.
 """
 
 import pytest
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from unittest.mock import MagicMock
 
 from src.core.services.analytics_service_impl import AnalyticsServiceImpl
 from src.core.domain.analytics import AnalyticsFilter, MetricResult, HistoricalQueryFilter
-from src.core.ports.exceptions import InvalidMetricError, InsufficientDataError
+from src.core.domain.measurement import Measurement
+from src.core.ports.exceptions import InvalidMetricError, InsufficientDataError, AnalyticsServiceError
 
 
 class TestAnalyticsServiceImpl:
@@ -319,3 +320,79 @@ class TestAnalyticsServiceImpl:
 
         with pytest.raises(InvalidMetricError):
             await service.query_historical_data(filters)
+
+    @pytest.mark.asyncio
+    async def test_query_historical_averages_groups_measurements(
+        self, mock_measurement_repository, mock_logger
+    ):
+        """Historical averages should group measurements by interval and compute averages."""
+        service = AnalyticsServiceImpl(mock_measurement_repository)
+
+        base_time = datetime(2024, 1, 1, tzinfo=timezone.utc)
+        measurements = [
+            Measurement(
+                controller_id="device-001",
+                timestamp=base_time + timedelta(minutes=2),
+                temperature=20.0
+            ),
+            Measurement(
+                controller_id="device-001",
+                timestamp=base_time + timedelta(minutes=10),
+                temperature=22.0
+            ),
+            Measurement(
+                controller_id="device-001",
+                timestamp=base_time + timedelta(minutes=20),
+                temperature=26.0
+            ),
+            Measurement(
+                controller_id="device-001",
+                timestamp=base_time + timedelta(minutes=35),
+                temperature=30.0
+            )
+        ]
+
+        mock_measurement_repository.get_measurements.return_value = measurements
+
+        filters = HistoricalQueryFilter(
+            start_time=base_time,
+            end_time=base_time + timedelta(minutes=45),
+            controller_id="device-001",
+            parameter="temperature"
+        )
+
+        response = await service.query_historical_averages(filters, 15)
+
+        assert response.interval_minutes == 15
+        assert response.total_points == 3
+        assert response.filters_applied.controller_id == "device-001"
+
+        averages = {dp.interval_start: dp for dp in response.data_points}
+        assert averages[base_time].measurements_count == 2
+        assert averages[base_time].average_value == pytest.approx(21.0)
+        assert averages[base_time + timedelta(minutes=15)].average_value == pytest.approx(26.0)
+        assert averages[base_time + timedelta(minutes=30)].measurements_count == 1
+        assert averages[base_time + timedelta(minutes=30)].interval_end - averages[base_time + timedelta(minutes=30)].interval_start == timedelta(minutes=15)
+
+        mock_measurement_repository.get_measurements.assert_called_with(
+            controller_id="device-001",
+            start_time=base_time,
+            end_time=base_time + timedelta(minutes=45),
+            limit=None,
+            sensor_id=None,
+            parameter="temperature"
+        )
+
+    @pytest.mark.asyncio
+    async def test_query_historical_averages_invalid_interval(
+        self, mock_measurement_repository, mock_logger
+    ):
+        """Historical averages should reject unsupported intervals."""
+        service = AnalyticsServiceImpl(mock_measurement_repository)
+
+        filters = HistoricalQueryFilter()
+
+        with pytest.raises(AnalyticsServiceError):
+            await service.query_historical_averages(filters, 5)
+
+        mock_measurement_repository.get_measurements.assert_not_called()

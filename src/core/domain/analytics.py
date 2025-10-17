@@ -133,3 +133,24 @@ class HistoricalQueryResponse:
     generated_at: datetime
     total_points: int
     filters_applied: HistoricalQueryFilter
+
+
+@dataclass
+class HistoricalAverageDataPoint:
+    """Value object representing average measurements over a time interval."""
+    interval_start: datetime
+    interval_end: datetime
+    controller_id: str
+    parameter: str
+    average_value: float
+    measurements_count: int
+
+
+@dataclass
+class HistoricalAveragesResponse:
+    """Aggregate containing averaged historical measurement data."""
+    data_points: List[HistoricalAverageDataPoint]
+    generated_at: datetime
+    total_points: int
+    interval_minutes: int
+    filters_applied: HistoricalQueryFilter
