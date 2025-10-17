@@ -29,7 +29,8 @@ from ..models import (
     ErrorResponse,
     HistoricalQueryResponseModel,
     SupportedMetricsResponse,
-    LatestMeasurementResponse
+    LatestMeasurementResponse,
+    HistoricalAveragesResponseModel
 )
 
 
@@ -182,6 +183,39 @@ class AnalyticsHandlers:
             limit: Optional[int] = Query(None, ge=1, le=10000, description="Maximum number of records")
         ):
             return await self._handle_historical_query(
+                start_time=start_time,
+                end_time=end_time,
+                controller_id=controller_id,
+                sensor_id=sensor_id,
+                parameter=parameter,
+                limit=limit
+            )
+
+        @self.router.get(
+            "/historical/averages",
+            response_model=HistoricalAveragesResponseModel,
+            responses={
+                400: {"model": ErrorResponse},
+                500: {"model": ErrorResponse}
+            },
+            summary="Averaged Historical Measurements",
+            description="Query historical measurement data averaged over fixed intervals"
+        )
+        async def historical_averages(
+            average_interval: int = Query(
+                ...,
+                description="Averaging interval in minutes (15, 30, 60, 120, 360, 720)",
+                ge=1
+            ),
+            start_time: Optional[str] = Query(None, description="Start time (ISO format)"),
+            end_time: Optional[str] = Query(None, description="End time (ISO format)"),
+            controller_id: Optional[str] = Query(None, description="Controller ID"),
+            sensor_id: Optional[str] = Query(None, description="Sensor ID"),
+            parameter: Optional[str] = Query(None, description="Measurement parameter name"),
+            limit: Optional[int] = Query(None, ge=1, le=10000, description="Maximum number of records considered")
+        ):
+            return await self._handle_historical_averages(
+                average_interval=average_interval,
                 start_time=start_time,
                 end_time=end_time,
                 controller_id=controller_id,
@@ -570,6 +604,84 @@ class AnalyticsHandlers:
                 detail={
                     "error": "Internal server error",
                     "message": "An unexpected error occurred while retrieving historical data"
+                }
+            )
+
+    async def _handle_historical_averages(
+        self,
+        average_interval: int,
+        start_time: Optional[str],
+        end_time: Optional[str],
+        controller_id: Optional[str],
+        sensor_id: Optional[str],
+        parameter: Optional[str],
+        limit: Optional[int]
+    ) -> HistoricalAveragesResponseModel:
+        """Handle historical measurements averaging query."""
+        try:
+            parsed_start_time = self._parse_datetime(start_time) if start_time else None
+            parsed_end_time = self._parse_datetime(end_time) if end_time else None
+
+            if parsed_start_time and parsed_end_time and parsed_start_time > parsed_end_time:
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "error": "Invalid time range",
+                        "message": "start_time must be before end_time"
+                    }
+                )
+
+            filters = HistoricalQueryFilter(
+                start_time=parsed_start_time,
+                end_time=parsed_end_time,
+                limit=limit,
+                controller_id=controller_id,
+                sensor_id=sensor_id,
+                parameter=parameter
+            )
+
+            response = await self.analytics_service.query_historical_averages(filters, average_interval)
+            return HistoricalAveragesResponseModel.from_domain(response)
+
+        except InvalidMetricError as e:
+            self.logger.warning(f"Invalid metric for historical averages query: {e.metric_name}")
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "Invalid metric",
+                    "message": str(e),
+                    "supported_metrics": e.supported_metrics
+                }
+            )
+
+        except AnalyticsServiceError as e:
+            self.logger.warning(f"Invalid historical averages request: {e}")
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "Invalid request",
+                    "message": str(e)
+                }
+            )
+
+        except ExternalServiceError as e:
+            self.logger.error(f"External service error in historical averages query: {e}")
+            raise HTTPException(
+                status_code=502,
+                detail={
+                    "error": "External service unavailable",
+                    "message": f"Go backend service error: {e.message}",
+                    "service": e.service_name
+                }
+            )
+
+        except Exception as e:
+            self.logger.error(f"Unexpected error in historical averages query: {e}")
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "error": "Internal server error",
+                    "message": "An unexpected error occurred while retrieving averaged historical data"
                 }
             )
 

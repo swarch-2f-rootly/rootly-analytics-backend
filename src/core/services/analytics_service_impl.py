@@ -4,7 +4,7 @@ This service orchestrates the analytics calculations and data access.
 """
 
 from typing import List, Dict, Any, Optional, Tuple
-from datetime import datetime
+from datetime import datetime, timedelta
 import pandas as pd
 
 from ..ports.analytics_service import AnalyticsService
@@ -24,7 +24,9 @@ from ..domain.analytics import (
     AnalyticsFilter,
     HistoricalQueryFilter,
     HistoricalDataPoint,
-    HistoricalQueryResponse
+    HistoricalQueryResponse,
+    HistoricalAverageDataPoint,
+    HistoricalAveragesResponse
 )
 from ..domain.measurement import Measurement
 from .analytics_calculations import AnalyticsCalculations
@@ -42,6 +44,14 @@ class AnalyticsServiceImpl(AnalyticsService):
         "air_humidity": "air_humidity",
         "soil_humidity": "soil_humidity",
         "light_intensity": "light_intensity"
+    }
+    ALLOWED_AVERAGE_INTERVALS = {
+        15: timedelta(minutes=15),
+        30: timedelta(minutes=30),
+        60: timedelta(hours=1),
+        120: timedelta(hours=2),
+        360: timedelta(hours=6),
+        720: timedelta(hours=12)
     }
 
     def __init__(self, measurement_repository: MeasurementRepository):
@@ -271,6 +281,134 @@ class AnalyticsServiceImpl(AnalyticsService):
             total_points=len(data_points),
             filters_applied=response_filters
         )
+
+    async def query_historical_averages(
+        self,
+        filters: HistoricalQueryFilter,
+        average_interval: int
+    ) -> HistoricalAveragesResponse:
+        """Aggregate historical measurements by interval and calculate averages."""
+        if average_interval not in self.ALLOWED_AVERAGE_INTERVALS:
+            raise AnalyticsServiceError(
+                f"Unsupported average interval: {average_interval} minutes"
+            )
+
+        parameter_filter = None
+        if filters.parameter:
+            if not self.is_metric_supported(filters.parameter):
+                raise InvalidMetricError(filters.parameter, list(self.SUPPORTED_METRICS.keys()))
+            parameter_filter = filters.parameter
+
+        measurements = await self.measurement_repository.get_measurements(
+            controller_id=filters.controller_id,
+            start_time=filters.start_time,
+            end_time=filters.end_time,
+            limit=filters.limit,
+            sensor_id=filters.sensor_id,
+            parameter=parameter_filter
+        )
+
+        response_filters = HistoricalQueryFilter(
+            start_time=filters.start_time,
+            end_time=filters.end_time,
+            limit=filters.limit,
+            controller_id=filters.controller_id,
+            sensor_id=filters.sensor_id,
+            parameter=filters.parameter
+        )
+
+        if not measurements:
+            return HistoricalAveragesResponse(
+                data_points=[],
+                generated_at=datetime.now(),
+                total_points=0,
+                interval_minutes=average_interval,
+                filters_applied=response_filters
+            )
+
+        interval_delta = self.ALLOWED_AVERAGE_INTERVALS[average_interval]
+
+        start_reference = filters.start_time or min(m.timestamp for m in measurements)
+        end_reference = filters.end_time or max(m.timestamp for m in measurements)
+
+        start_aligned = self._floor_to_interval(start_reference, interval_delta)
+        end_aligned = self._ceil_to_interval(end_reference, interval_delta)
+
+        if start_aligned == end_aligned:
+            end_aligned = start_aligned + interval_delta
+
+        candidate_metrics = [parameter_filter] if parameter_filter else list(self.SUPPORTED_METRICS.keys())
+
+        bucket_totals: Dict[Tuple[str, str, datetime], Dict[str, float]] = {}
+
+        for measurement in measurements:
+            measurement_ts = measurement.timestamp
+
+            if filters.start_time and measurement_ts < filters.start_time:
+                continue
+            if filters.end_time and measurement_ts > filters.end_time:
+                continue
+
+            for metric_name in candidate_metrics:
+                attribute = self.SUPPORTED_METRICS[metric_name]
+                value = getattr(measurement, attribute, None)
+                if value is None:
+                    continue
+
+                interval_start = self._floor_to_interval(measurement_ts, interval_delta)
+                if interval_start < start_aligned:
+                    interval_start = start_aligned
+                if interval_start >= end_aligned:
+                    continue
+
+                key = (measurement.controller_id, metric_name, interval_start)
+                bucket = bucket_totals.setdefault(key, {"sum": 0.0, "count": 0})
+                bucket["sum"] += float(value)
+                bucket["count"] += 1
+
+        data_points: List[HistoricalAverageDataPoint] = []
+        for (controller_id, metric_name, interval_start), bucket in bucket_totals.items():
+            if bucket["count"] == 0:
+                continue
+
+            data_points.append(
+                HistoricalAverageDataPoint(
+                    interval_start=interval_start,
+                    interval_end=interval_start + interval_delta,
+                    controller_id=controller_id,
+                    parameter=metric_name,
+                    average_value=bucket["sum"] / bucket["count"],
+                    measurements_count=bucket["count"]
+                )
+            )
+
+        data_points.sort(key=lambda point: (point.interval_start, point.controller_id, point.parameter))
+
+        return HistoricalAveragesResponse(
+            data_points=data_points,
+            generated_at=datetime.now(),
+            total_points=len(data_points),
+            interval_minutes=average_interval,
+            filters_applied=response_filters
+        )
+
+    def _floor_to_interval(self, timestamp: datetime, interval: timedelta) -> datetime:
+        """Snap timestamp down to the nearest interval boundary."""
+        if timestamp.tzinfo is None:
+            epoch = datetime(1970, 1, 1)
+        else:
+            epoch = datetime(1970, 1, 1, tzinfo=timestamp.tzinfo)
+
+        elapsed = timestamp - epoch
+        intervals = elapsed // interval
+        return epoch + (intervals * interval)
+
+    def _ceil_to_interval(self, timestamp: datetime, interval: timedelta) -> datetime:
+        """Snap timestamp up to the nearest interval boundary."""
+        floored = self._floor_to_interval(timestamp, interval)
+        if floored == timestamp:
+            return timestamp
+        return floored + interval
 
     async def _calculate_metrics_for_sensor(
         self, 

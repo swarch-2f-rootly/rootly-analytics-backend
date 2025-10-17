@@ -18,7 +18,9 @@ from ...core.domain.analytics import (
     AnalyticsFilter,
     HistoricalQueryResponse,
     HistoricalDataPoint,
-    HistoricalQueryFilter
+    HistoricalQueryFilter,
+    HistoricalAverageDataPoint,
+    HistoricalAveragesResponse
 )
 
 
@@ -228,6 +230,46 @@ class HistoricalQueryResponseModel(BaseModel):
             data_points=[HistoricalDataPointModel.from_domain(dp) for dp in response.data_points],
             generated_at=response.generated_at,
             total_points=response.total_points,
+            filters_applied=HistoricalQueryFiltersModel.from_domain(response.filters_applied)
+        )
+
+
+class HistoricalAverageDataPointModel(BaseModel):
+    """Model representing averaged measurement data for a time interval."""
+    interval_start: datetime = Field(..., description="Start timestamp of the averaging interval")
+    interval_end: datetime = Field(..., description="End timestamp of the averaging interval (exclusive)")
+    controller_id: str = Field(..., description="Controller identifier")
+    parameter: str = Field(..., description="Measurement parameter name")
+    average_value: float = Field(..., description="Average value across the interval")
+    measurements_count: int = Field(..., ge=1, description="Number of measurements used to compute the average")
+
+    @classmethod
+    def from_domain(cls, data_point: HistoricalAverageDataPoint) -> "HistoricalAverageDataPointModel":
+        return cls(
+            interval_start=data_point.interval_start,
+            interval_end=data_point.interval_end,
+            controller_id=data_point.controller_id,
+            parameter=data_point.parameter,
+            average_value=data_point.average_value,
+            measurements_count=data_point.measurements_count
+        )
+
+
+class HistoricalAveragesResponseModel(BaseModel):
+    """Response model encapsulating averaged historical measurement data."""
+    data_points: List[HistoricalAverageDataPointModel] = Field(..., description="Averaged measurement entries")
+    generated_at: datetime = Field(..., description="Response generation timestamp")
+    total_points: int = Field(..., description="Total number of averaged intervals returned")
+    interval_minutes: int = Field(..., description="Length of the averaging interval in minutes")
+    filters_applied: HistoricalQueryFiltersModel = Field(..., description="Filters applied to the query")
+
+    @classmethod
+    def from_domain(cls, response: HistoricalAveragesResponse) -> "HistoricalAveragesResponseModel":
+        return cls(
+            data_points=[HistoricalAverageDataPointModel.from_domain(dp) for dp in response.data_points],
+            generated_at=response.generated_at,
+            total_points=response.total_points,
+            interval_minutes=response.interval_minutes,
             filters_applied=HistoricalQueryFiltersModel.from_domain(response.filters_applied)
         )
 

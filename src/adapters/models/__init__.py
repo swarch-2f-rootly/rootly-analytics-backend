@@ -15,6 +15,8 @@ from .models import (
     HistoricalQueryResponseModel,
     HistoricalDataPointModel,
     HistoricalQueryFiltersModel,
+    HistoricalAverageDataPointModel,
+    HistoricalAveragesResponseModel,
     SupportedMetricsResponse,
     LatestMeasurementResponse
 )
@@ -31,6 +33,8 @@ __all__ = [
     "HistoricalQueryResponseModel",
     "HistoricalDataPointModel",
     "HistoricalQueryFiltersModel",
+    "HistoricalAverageDataPointModel",
+    "HistoricalAveragesResponseModel",
     "SupportedMetricsResponse",
     "LatestMeasurementResponse"
 ]
