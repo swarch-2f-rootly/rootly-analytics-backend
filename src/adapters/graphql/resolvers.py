@@ -9,6 +9,7 @@ import logging
 from datetime import datetime
 
 from ...core.ports.analytics_service import AnalyticsService
+from ...core.ports.cache_service import CacheService, CacheKeyPatterns, CacheTTL
 from ...core.ports.exceptions import (
     AnalyticsServiceError,
     InvalidMetricError,
@@ -30,13 +31,16 @@ from .types import (
     TrendAnalysisInput,
     LatestMeasurementResponse,
     HistoricalQueryResponse,
-    HistoricalQueryInput
+    HistoricalQueryInput,
+    ComprehensiveAnalyticsInput,
+    ComprehensiveAnalyticsReport
 )
 
 
 # Global variables to store dependencies (will be set by create_graphql_query)
 _analytics_service: Optional[AnalyticsService] = None
 _influx_repository = None
+_cache_service = None
 _logger = logging.getLogger(__name__)
 
 
@@ -45,7 +49,7 @@ class Query:
     """GraphQL Query resolvers for Analytics Service."""
 
     @strawberry.field
-    def get_supported_metrics(self) -> List[str]:
+    async def get_supported_metrics(self) -> List[str]:
         """
         Get list of supported metrics available in the system.
         
@@ -56,7 +60,22 @@ class Query:
         try:
             if _analytics_service is None:
                 raise Exception("Analytics service not initialized")
+            
+            # Try to get from cache first
+            if _cache_service:
+                cache_key = CacheKeyPatterns.GRAPHQL_SUPPORTED_METRICS
+                cached_metrics = await _cache_service.get_json(cache_key)
+                if cached_metrics:
+                    _logger.debug("Returning supported metrics from cache")
+                    return cached_metrics
+            
+            # Get from service
             metrics = _analytics_service.get_supported_metrics()
+            
+            # Cache the result
+            if _cache_service and metrics:
+                await _cache_service.set_json(CacheKeyPatterns.GRAPHQL_SUPPORTED_METRICS, metrics, CacheTTL.VERY_LONG)
+            
             return metrics
         except Exception as e:
             _logger.error(f"Error getting supported metrics: {e}")
@@ -208,8 +227,28 @@ class Query:
         try:
             if _analytics_service is None:
                 raise Exception("Analytics service not initialized")
+            
             # Convert GraphQL filters to domain filters
             domain_filters = filters.to_domain() if filters else AnalyticsFilter()
+            
+            # Check if real-time data is requested
+            is_real_time = domain_filters.real_time if domain_filters.real_time is not None else False
+            
+            # Try to get from cache first (only if not real-time)
+            if _cache_service and not is_real_time:
+                cache_key = _cache_service.generate_cache_key(
+                    CacheKeyPatterns.GRAPHQL_SINGLE_METRIC,
+                    metric=metric_name,
+                    controller=controller_id,
+                    start=domain_filters.start_time.isoformat() if domain_filters.start_time else None,
+                    end=domain_filters.end_time.isoformat() if domain_filters.end_time else None,
+                    limit=domain_filters.limit
+                )
+                
+                cached_report = await _cache_service.get_json(cache_key)
+                if cached_report:
+                    _logger.debug(f"Returning single metric report from cache for {metric_name}")
+                    return AnalyticsReport.from_dict(cached_report)
             
             # Call the analytics service
             domain_report = await _analytics_service.generate_single_metric_report(
@@ -219,7 +258,28 @@ class Query:
             )
             
             # Convert domain report to GraphQL type
-            return AnalyticsReport.from_domain(domain_report)
+            graphql_report = AnalyticsReport.from_domain(domain_report)
+            
+            # Cache the result with appropriate TTL
+            if _cache_service and graphql_report:
+                cache_key = _cache_service.generate_cache_key(
+                    CacheKeyPatterns.GRAPHQL_SINGLE_METRIC,
+                    metric=metric_name,
+                    controller=controller_id,
+                    start=domain_filters.start_time.isoformat() if domain_filters.start_time else None,
+                    end=domain_filters.end_time.isoformat() if domain_filters.end_time else None,
+                    limit=domain_filters.limit
+                )
+                # Use shorter TTL for real-time requests to still benefit from minimal caching
+                ttl = CacheTTL.REAL_TIME if is_real_time else CacheTTL.MEDIUM
+                await _cache_service.set_json(cache_key, graphql_report.to_dict(), ttl)
+                
+                if is_real_time:
+                    _logger.debug(f"Cached single metric report with real-time TTL ({CacheTTL.REAL_TIME}s)")
+                else:
+                    _logger.debug(f"Cached single metric report with standard TTL ({CacheTTL.MEDIUM}s)")
+            
+            return graphql_report
             
         except InvalidMetricError as e:
             _logger.error(f"Invalid metric error: {e}")
@@ -256,8 +316,28 @@ class Query:
         try:
             if _analytics_service is None:
                 raise Exception("Analytics service not initialized")
+            
             # Convert GraphQL input to domain request
             domain_filters = input.filters.to_domain() if input.filters else AnalyticsFilter()
+            
+            # Check if real-time data is requested
+            is_real_time = domain_filters.real_time if domain_filters.real_time is not None else False
+            
+            # Try to get from cache first (only if not real-time)
+            if _cache_service and not is_real_time:
+                cache_key = _cache_service.generate_cache_key(
+                    CacheKeyPatterns.GRAPHQL_MULTI_REPORT,
+                    controllers=",".join(sorted(input.controllers)),
+                    metrics=",".join(sorted(input.metrics)),
+                    start=domain_filters.start_time.isoformat() if domain_filters.start_time else None,
+                    end=domain_filters.end_time.isoformat() if domain_filters.end_time else None,
+                    limit=domain_filters.limit
+                )
+                
+                cached_response = await _cache_service.get_json(cache_key)
+                if cached_response:
+                    _logger.debug("Returning multi metric report from cache")
+                    return MultiReportResponse.from_dict(cached_response)
             
             domain_request = MultiReportRequest(
                 controllers=input.controllers,
@@ -269,7 +349,28 @@ class Query:
             domain_response = await _analytics_service.generate_multi_report(domain_request)
             
             # Convert domain response to GraphQL type
-            return MultiReportResponse.from_domain(domain_response)
+            graphql_response = MultiReportResponse.from_domain(domain_response)
+            
+            # Cache the result with appropriate TTL
+            if _cache_service and graphql_response:
+                cache_key = _cache_service.generate_cache_key(
+                    CacheKeyPatterns.GRAPHQL_MULTI_REPORT,
+                    controllers=",".join(sorted(input.controllers)),
+                    metrics=",".join(sorted(input.metrics)),
+                    start=domain_filters.start_time.isoformat() if domain_filters.start_time else None,
+                    end=domain_filters.end_time.isoformat() if domain_filters.end_time else None,
+                    limit=domain_filters.limit
+                )
+                # Use shorter TTL for real-time requests
+                ttl = CacheTTL.REAL_TIME if is_real_time else CacheTTL.MEDIUM
+                await _cache_service.set_json(cache_key, graphql_response.to_dict(), ttl)
+                
+                if is_real_time:
+                    _logger.debug(f"Cached multi metric report with real-time TTL ({CacheTTL.REAL_TIME}s)")
+                else:
+                    _logger.debug(f"Cached multi metric report with standard TTL ({CacheTTL.MEDIUM}s)")
+            
+            return graphql_response
             
         except InvalidMetricError as e:
             _logger.error(f"Invalid metric error: {e}")
@@ -306,9 +407,29 @@ class Query:
         try:
             if _analytics_service is None:
                 raise Exception("Analytics service not initialized")
+            
             # Parse datetime strings
             start_time = datetime.fromisoformat(input.start_time.replace('Z', '+00:00'))
             end_time = datetime.fromisoformat(input.end_time.replace('Z', '+00:00'))
+            
+            # Check if real-time data is requested
+            is_real_time = input.real_time if input.real_time is not None else False
+            
+            # Try to get from cache first (only if not real-time)
+            if _cache_service and not is_real_time:
+                cache_key = _cache_service.generate_cache_key(
+                    CacheKeyPatterns.GRAPHQL_TREND_ANALYSIS,
+                    metric=input.metric_name,
+                    controller=input.controller_id,
+                    start=start_time.isoformat(),
+                    end=end_time.isoformat(),
+                    interval=input.interval
+                )
+                
+                cached_trend = await _cache_service.get_json(cache_key)
+                if cached_trend:
+                    _logger.debug(f"Returning trend analysis from cache for {input.metric_name}")
+                    return TrendAnalysis.from_dict(cached_trend)
             
             # Call the analytics service
             domain_trend = await _analytics_service.generate_trend_analysis(
@@ -316,11 +437,33 @@ class Query:
                 controller_id=input.controller_id,
                 start_time=start_time,
                 end_time=end_time,
-                interval=input.interval
+                interval=input.interval,
+                real_time=is_real_time
             )
             
             # Convert domain trend to GraphQL type
-            return TrendAnalysis.from_domain(domain_trend)
+            graphql_trend = TrendAnalysis.from_domain(domain_trend)
+            
+            # Cache the result with appropriate TTL
+            if _cache_service and graphql_trend:
+                cache_key = _cache_service.generate_cache_key(
+                    CacheKeyPatterns.GRAPHQL_TREND_ANALYSIS,
+                    metric=input.metric_name,
+                    controller=input.controller_id,
+                    start=start_time.isoformat(),
+                    end=end_time.isoformat(),
+                    interval=input.interval
+                )
+                # Use shorter TTL for real-time requests
+                ttl = CacheTTL.REAL_TIME if is_real_time else CacheTTL.LONG
+                await _cache_service.set_json(cache_key, graphql_trend.to_dict(), ttl)
+                
+                if is_real_time:
+                    _logger.debug(f"Cached trend analysis with real-time TTL ({CacheTTL.REAL_TIME}s)")
+                else:
+                    _logger.debug(f"Cached trend analysis with standard TTL ({CacheTTL.LONG}s)")
+            
+            return graphql_trend
             
         except InvalidMetricError as e:
             _logger.error(f"Invalid metric error: {e}")
@@ -338,19 +481,90 @@ class Query:
             _logger.error(f"Unexpected error in trend analysis: {e}")
             raise Exception(f"Failed to generate trend analysis: {str(e)}")
 
+    @strawberry.field
+    async def get_comprehensive_analytics_report(
+        self,
+        input: ComprehensiveAnalyticsInput
+    ) -> ComprehensiveAnalyticsReport:
+        """
+        Generate comprehensive analytics report with extensive statistical calculations.
+        This demonstrates cache performance benefits with computationally expensive operations.
+        
+        Args:
+            input: ComprehensiveAnalyticsInput with controllers, metrics, and filters
+            
+        Returns:
+            ComprehensiveAnalyticsReport with detailed analytics and performance metrics
+            
+        Raises:
+            Exception: If report generation fails
+        """
+        _logger.info(f"GraphQL query: getComprehensiveAnalyticsReport - controllers: {len(input.controller_ids)}, metrics: {len(input.metrics)}")
+        
+        try:
+            if _analytics_service is None:
+                raise Exception("Analytics service not initialized")
+            
+            # Convert GraphQL input to domain filters
+            domain_filters = input.filters.to_domain() if input.filters else AnalyticsFilter()
+            
+            # Log cache strategy being used
+            cache_strategy = "real-time (bypass cache)" if domain_filters.real_time else "cached"
+            _logger.info(f"Using cache strategy: {cache_strategy}")
+            
+            # Call the expensive analytics service method
+            comprehensive_data = await _analytics_service.generate_comprehensive_analytics_report(
+                controller_ids=input.controller_ids,
+                metrics=input.metrics,
+                filters=domain_filters
+            )
+            
+            # Log performance metrics for demonstration
+            performance = comprehensive_data.get("performance", {})
+            execution_time = performance.get("execution_time_ms", 0)
+            cache_hit = performance.get("cache_hit", False)
+            data_source = performance.get("data_source", "unknown")
+            
+            _logger.info(
+                f"Comprehensive analytics completed: "
+                f"execution_time={execution_time}ms, "
+                f"cache_hit={cache_hit}, "
+                f"data_source={data_source}, "
+                f"controllers={len(input.controller_ids)}, "
+                f"metrics={len(input.metrics)}"
+            )
+            
+            # Convert to GraphQL response
+            return ComprehensiveAnalyticsReport.from_dict(comprehensive_data)
+            
+        except InvalidMetricError as e:
+            _logger.error(f"Invalid metric error: {e}")
+            raise Exception(f"Invalid metric: {str(e)}")
+        except InsufficientDataError as e:
+            _logger.error(f"Insufficient data error: {e}")
+            raise Exception(f"Insufficient data: {str(e)}")
+        except AnalyticsServiceError as e:
+            _logger.error(f"Analytics service error: {e}")
+            raise Exception(f"Analytics error: {str(e)}")
+        except Exception as e:
+            _logger.error(f"Unexpected error in comprehensive analytics: {e}")
+            raise Exception(f"Failed to generate comprehensive report: {str(e)}")
 
-def create_graphql_query(analytics_service: AnalyticsService, influx_repository) -> Query:
+
+def create_graphql_query(analytics_service: AnalyticsService, influx_repository, cache_service: Optional[CacheService] = None) -> Query:
     """
     Factory function to create GraphQL Query with injected dependencies.
     
     Args:
         analytics_service: Implementation of the AnalyticsService port
         influx_repository: Repository for health checks
+        cache_service: Cache service for improved performance (optional)
         
     Returns:
         Query instance with injected dependencies
     """
-    global _analytics_service, _influx_repository
+    global _analytics_service, _influx_repository, _cache_service
     _analytics_service = analytics_service
     _influx_repository = influx_repository
+    _cache_service = cache_service
     return Query()

@@ -15,6 +15,8 @@ from .core.services.analytics_service_impl import AnalyticsServiceImpl
 from .adapters.repositories.influx_repository import InfluxRepository
 from .adapters.handlers.analytics_handlers import AnalyticsHandlers
 from .adapters.graphql.schema import create_graphql_router
+from .adapters.cache.redis_cache import RedisCache
+from .core.ports.cache_service import CacheService
 from .core.ports.exceptions import (
     AnalyticsServiceError,
     InvalidMetricError,
@@ -36,10 +38,25 @@ async def lifespan(app: FastAPI):
 
     # Startup
     logger.info(f"Connecting to InfluxDB at: {config.INFLUXDB_URL}")
+    
+    # Initialize services
+    cache_service = await get_cache_service()
+    analytics_service = await get_analytics_service(cache_service=cache_service)
+    influx_repository = get_influx_repository()
+    
+    # Store services in app state for access in endpoints
+    app.state.cache_service = cache_service
+    app.state.analytics_service = analytics_service
+    app.state.influx_repository = influx_repository
+    
     yield
 
     # Shutdown
     logger.info("Shutting down Analytics Service...")
+    
+    # Cleanup cache connection
+    if hasattr(app.state, 'cache_service') and app.state.cache_service:
+        await app.state.cache_service.disconnect()
 
 
 # Create FastAPI application
@@ -73,34 +90,70 @@ def get_influx_repository() -> InfluxRepository:
     )
 
 
-def get_analytics_service(
-    influx_repo: InfluxRepository = None
+async def get_cache_service() -> CacheService:
+    """Get cache service instance."""
+    if not config.REDIS_ENABLED:
+        logger.info("Redis cache is disabled")
+        return None
+    
+    try:
+        redis_cache = RedisCache(
+            host=config.REDIS_HOST,
+            port=config.REDIS_PORT,
+            password=config.REDIS_PASSWORD,
+            db=config.REDIS_DB,
+            default_ttl=config.CACHE_DEFAULT_TTL,
+            logger=logger
+        )
+        
+        # Test connection
+        if await redis_cache.connect():
+            logger.info("Redis cache connected successfully")
+            return redis_cache
+        else:
+            logger.warning("Failed to connect to Redis cache, running without cache")
+            return None
+    except Exception as e:
+        logger.error(f"Error initializing cache service: {e}")
+        return None
+
+
+async def get_analytics_service(
+    influx_repo: InfluxRepository = None,
+    cache_service: CacheService = None
 ) -> AnalyticsServiceImpl:
     """Get analytics service instance with injected dependencies."""
     if influx_repo is None:
         influx_repo = get_influx_repository()
+    
+    if cache_service is None:
+        cache_service = await get_cache_service()
 
     return AnalyticsServiceImpl(
-        measurement_repository=influx_repo
+        measurement_repository=influx_repo,
+        cache_service=cache_service
     )
 
 
-# Setup analytics handlers
-analytics_service = get_analytics_service()
-analytics_handlers = AnalyticsHandlers(analytics_service)
-influx_repository = get_influx_repository()
-
-# Include REST API routes
-app.include_router(analytics_handlers.router)
-
-# Setup and include GraphQL
-graphql_router = create_graphql_router(
-    analytics_service=analytics_service,
-    influx_repository=influx_repository,
-    playground_enabled=config.GRAPHQL_PLAYGROUND_ENABLED,
-    introspection_enabled=config.GRAPHQL_INTROSPECTION_ENABLED
-)
-app.include_router(graphql_router, prefix=config.GRAPHQL_ENDPOINT, tags=["GraphQL"])
+# Defer service setup to startup event since it requires async initialization
+@app.on_event("startup")
+async def startup_event():
+    """Initialize services on startup."""
+    # Services are already initialized in lifespan, now setup routes
+    analytics_handlers = AnalyticsHandlers(app.state.analytics_service)
+    
+    # Include REST API routes
+    app.include_router(analytics_handlers.router)
+    
+    # Setup and include GraphQL
+    graphql_router = create_graphql_router(
+        analytics_service=app.state.analytics_service,
+        influx_repository=app.state.influx_repository,
+        cache_service=app.state.cache_service,
+        playground_enabled=config.GRAPHQL_PLAYGROUND_ENABLED,
+        introspection_enabled=config.GRAPHQL_INTROSPECTION_ENABLED
+    )
+    app.include_router(graphql_router, prefix=config.GRAPHQL_ENDPOINT, tags=["GraphQL"])
 
 # Register error handlers
 register_error_handlers(app)

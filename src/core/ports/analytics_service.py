@@ -71,7 +71,8 @@ class AnalyticsService(ABC):
         controller_id: str,
         start_time: datetime,
         end_time: datetime,
-        interval: str
+        interval: str,
+        real_time: bool = False
     ) -> TrendAnalysis:
         """
         Generate trend analysis for a specific metric over time.
@@ -82,6 +83,7 @@ class AnalyticsService(ABC):
             start_time: Start time for trend analysis
             end_time: End time for trend analysis
             interval: Time interval for data aggregation (e.g., '1h', '1d')
+            real_time: Whether to bypass cache for real-time data
             
         Returns:
             TrendAnalysis with time-series data
@@ -145,5 +147,26 @@ class AnalyticsService(ABC):
 
         Returns:
             The most recent Measurement object, or None if no data found in the last 10 minutes
+        """
+        pass
+
+    @abstractmethod
+    async def generate_comprehensive_analytics_report(
+        self,
+        controller_ids: List[str],
+        metrics: List[str],
+        filters: AnalyticsFilter
+    ) -> Dict[str, Any]:
+        """
+        Generate a comprehensive analytics report with extensive statistical calculations.
+        This is a computationally expensive operation that demonstrates cache benefits.
+        
+        Args:
+            controller_ids: List of controller IDs to analyze
+            metrics: List of metrics to calculate
+            filters: filters including real_time flag
+            
+        Returns:
+            Comprehensive analytics report with advanced statistics
         """
         pass

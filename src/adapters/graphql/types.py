@@ -138,6 +138,26 @@ class HealthStatus:
     timestamp: str
 
 
+@strawberry.type
+class ComprehensiveAnalyticsReport:
+    """GraphQL type for comprehensive analytics report with performance metrics."""
+    summary: str  # JSON string of summary data
+    controller_analytics: str  # JSON string of controller analytics
+    cross_controller_analysis: str  # JSON string of cross-controller analysis
+    performance: str  # JSON string of performance metrics
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "ComprehensiveAnalyticsReport":
+        """Create from service response dictionary."""
+        import json
+        return cls(
+            summary=json.dumps(data.get("summary", {})),
+            controller_analytics=json.dumps(data.get("controller_analytics", {})),
+            cross_controller_analysis=json.dumps(data.get("cross_controller_analysis", {})),
+            performance=json.dumps(data.get("performance", {}))
+        )
+
+
 # Input types for GraphQL mutations and queries
 @strawberry.input
 class AnalyticsFilters:
@@ -145,6 +165,7 @@ class AnalyticsFilters:
     start_time: Optional[str] = None
     end_time: Optional[str] = None
     limit: Optional[int] = None
+    real_time: Optional[bool] = False
 
     def to_domain(self) -> DomainAnalyticsFilter:
         """Convert GraphQL input to domain AnalyticsFilter."""
@@ -159,7 +180,8 @@ class AnalyticsFilters:
         return DomainAnalyticsFilter(
             start_time=start_dt,
             end_time=end_dt,
-            limit=self.limit
+            limit=self.limit,
+            real_time=self.real_time
         )
 
 
@@ -179,6 +201,15 @@ class TrendAnalysisInput:
     start_time: str
     end_time: str
     interval: str = "1h"
+    real_time: Optional[bool] = False
+
+
+@strawberry.input
+class ComprehensiveAnalyticsInput:
+    """GraphQL input type for comprehensive analytics report."""
+    controller_ids: List[str]
+    metrics: List[str]
+    filters: Optional[AnalyticsFilters] = None
 
 
 @strawberry.input

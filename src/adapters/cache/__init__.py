@@ -1,0 +1,3 @@
+"""
+Cache adapter initialization module.
+"""

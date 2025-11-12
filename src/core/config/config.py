@@ -24,6 +24,20 @@ class Config:
     INFLUXDB_BUCKET: str = os.getenv("INFLUXDB_BUCKET", "rootly-bucket")
     INFLUXDB_ORG: str = os.getenv("INFLUXDB_ORG", "rootly-org")
 
+    # Redis Cache configuration
+    REDIS_HOST: str = os.getenv("REDIS_HOST", "cache-analytics")
+    REDIS_PORT: int = int(os.getenv("REDIS_PORT", "6379"))
+    REDIS_PASSWORD: str = os.getenv("REDIS_PASSWORD", "redis123")
+    REDIS_DB: int = int(os.getenv("REDIS_DB", "0"))
+    REDIS_ENABLED: bool = os.getenv("REDIS_ENABLED", "true").lower() == "true"
+    
+    # Cache TTL settings (in seconds)
+    CACHE_TTL_REAL_TIME: int = int(os.getenv("CACHE_TTL_REAL_TIME", "30"))   # 30 seconds - for real-time data
+    CACHE_TTL_SHORT: int = int(os.getenv("CACHE_TTL_SHORT", "300"))          # 5 minutes
+    CACHE_TTL_MEDIUM: int = int(os.getenv("CACHE_TTL_MEDIUM", "900"))        # 15 minutes  
+    CACHE_TTL_LONG: int = int(os.getenv("CACHE_TTL_LONG", "3600"))           # 1 hour
+    CACHE_DEFAULT_TTL: int = int(os.getenv("CACHE_DEFAULT_TTL", "900"))      # 15 minutes default
+
     # CORS configuration - Allow all origins for maximum compatibility
     CORS_ORIGINS: List[str] = ["*"]
 

@@ -9,6 +9,7 @@ class AnalyticsFilter:
     start_time: Optional[datetime] = None
     end_time: Optional[datetime] = None
     limit: Optional[int] = None
+    real_time: Optional[bool] = False
 
 
 @dataclass
