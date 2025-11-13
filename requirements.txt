@@ -17,7 +17,6 @@ strawberry-graphql[fastapi]==0.213.0
 
 # Redis cache
 redis==5.0.1
-aioredis==2.0.1
 
 # Environment variable management
 python-dotenv==1.0.0

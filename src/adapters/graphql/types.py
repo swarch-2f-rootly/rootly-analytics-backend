@@ -4,7 +4,7 @@ Strawberry GraphQL type definitions based on domain entities.
 """
 
 import strawberry
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone
 
 from ...core.domain.analytics import (

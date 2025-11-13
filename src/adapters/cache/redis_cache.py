@@ -3,7 +3,7 @@ Redis Cache Implementation.
 Provides Redis-based caching functionality for the Analytics Service.
 """
 
-import aioredis
+import redis.asyncio as redis
 from typing import Optional, List
 import logging
 from contextlib import asynccontextmanager
@@ -41,7 +41,7 @@ class RedisCache(CacheService):
         self.db = db
         self.default_ttl = default_ttl
         self.logger = logger or logging.getLogger(__name__)
-        self._redis: Optional[aioredis.Redis] = None
+        self._redis: Optional[redis.Redis] = None
 
     async def connect(self) -> bool:
         """
@@ -65,7 +65,7 @@ class RedisCache(CacheService):
             if self.password:
                 connection_kwargs["password"] = self.password
             
-            self._redis = aioredis.from_url(
+            self._redis = redis.from_url(
                 f"redis://:{self.password}@{self.host}:{self.port}/{self.db}" if self.password 
                 else f"redis://{self.host}:{self.port}/{self.db}",
                 **{k: v for k, v in connection_kwargs.items() if k not in ["host", "port", "db", "password"]}
