@@ -832,10 +832,10 @@ class AnalyticsServiceImpl(AnalyticsService):
             "controller_id": report.controller_id,
             "metrics": [
                 {
-                    "name": metric.name,
+                    "name": metric.metric_name,
                     "value": metric.value,
                     "unit": metric.unit,
-                    "timestamp": metric.timestamp.isoformat(),
+                    "timestamp": metric.calculated_at.isoformat(),
                     "controller_id": metric.controller_id,
                     "description": metric.description
                 }
@@ -854,10 +854,10 @@ class AnalyticsServiceImpl(AnalyticsService):
         """Deserialize dict to AnalyticsReport from cache."""
         metrics = [
             MetricResult(
-                name=metric["name"],
+                metric_name=metric["name"],
                 value=metric["value"],
                 unit=metric["unit"],
-                timestamp=datetime.fromisoformat(metric["timestamp"]),
+                calculated_at=datetime.fromisoformat(metric["timestamp"]),
                 controller_id=metric["controller_id"],
                 description=metric["description"]
             )

@@ -248,7 +248,9 @@ class Query:
                 cached_report = await _cache_service.get_json(cache_key)
                 if cached_report:
                     _logger.debug(f"Returning single metric report from cache for {metric_name}")
-                    return AnalyticsReport.from_dict(cached_report)
+                    # Deserialize cached domain report
+                    cached_domain_report = _analytics_service._deserialize_analytics_report(cached_report)
+                    return AnalyticsReport.from_domain(cached_domain_report)
             
             # Call the analytics service
             domain_report = await _analytics_service.generate_single_metric_report(
@@ -272,7 +274,9 @@ class Query:
                 )
                 # Use shorter TTL for real-time requests to still benefit from minimal caching
                 ttl = CacheTTL.REAL_TIME if is_real_time else CacheTTL.MEDIUM
-                await _cache_service.set_json(cache_key, graphql_report.to_dict(), ttl)
+                # Serialize domain report for caching  
+                serialized_report = _analytics_service._serialize_analytics_report(domain_report)
+                await _cache_service.set_json(cache_key, serialized_report, ttl)
                 
                 if is_real_time:
                     _logger.debug(f"Cached single metric report with real-time TTL ({CacheTTL.REAL_TIME}s)")
@@ -337,7 +341,20 @@ class Query:
                 cached_response = await _cache_service.get_json(cache_key)
                 if cached_response:
                     _logger.debug("Returning multi metric report from cache")
-                    return MultiReportResponse.from_dict(cached_response)
+                    # Deserialize cached domain response
+                    reports = {
+                        controller_id: _analytics_service._deserialize_analytics_report(report_data)
+                        for controller_id, report_data in cached_response["reports"].items()
+                    }
+                    from ...core.domain.analytics import MultiReportResponse as DomainMultiReportResponse
+                    from datetime import datetime
+                    cached_domain_response = DomainMultiReportResponse(
+                        reports=reports,
+                        generated_at=datetime.fromisoformat(cached_response["generated_at"]),
+                        total_controllers=cached_response["total_controllers"],
+                        total_metrics=cached_response["total_metrics"]
+                    )
+                    return MultiReportResponse.from_domain(cached_domain_response)
             
             domain_request = MultiReportRequest(
                 controllers=input.controllers,
@@ -352,7 +369,7 @@ class Query:
             graphql_response = MultiReportResponse.from_domain(domain_response)
             
             # Cache the result with appropriate TTL
-            if _cache_service and graphql_response:
+            if _cache_service and domain_response:
                 cache_key = _cache_service.generate_cache_key(
                     CacheKeyPatterns.GRAPHQL_MULTI_REPORT,
                     controllers=",".join(sorted(input.controllers)),
@@ -361,9 +378,19 @@ class Query:
                     end=domain_filters.end_time.isoformat() if domain_filters.end_time else None,
                     limit=domain_filters.limit
                 )
+                # Serialize domain response for caching
+                cache_data = {
+                    "reports": {
+                        controller_id: _analytics_service._serialize_analytics_report(report)
+                        for controller_id, report in domain_response.reports.items()
+                    },
+                    "generated_at": domain_response.generated_at.isoformat(),
+                    "total_controllers": domain_response.total_controllers,
+                    "total_metrics": domain_response.total_metrics
+                }
                 # Use shorter TTL for real-time requests
                 ttl = CacheTTL.REAL_TIME if is_real_time else CacheTTL.MEDIUM
-                await _cache_service.set_json(cache_key, graphql_response.to_dict(), ttl)
+                await _cache_service.set_json(cache_key, cache_data, ttl)
                 
                 if is_real_time:
                     _logger.debug(f"Cached multi metric report with real-time TTL ({CacheTTL.REAL_TIME}s)")
@@ -429,7 +456,9 @@ class Query:
                 cached_trend = await _cache_service.get_json(cache_key)
                 if cached_trend:
                     _logger.debug(f"Returning trend analysis from cache for {input.metric_name}")
-                    return TrendAnalysis.from_dict(cached_trend)
+                    # Deserialize cached domain trend
+                    cached_domain_trend = _analytics_service._deserialize_trend_analysis(cached_trend)
+                    return TrendAnalysis.from_domain(cached_domain_trend)
             
             # Call the analytics service
             domain_trend = await _analytics_service.generate_trend_analysis(
@@ -456,7 +485,9 @@ class Query:
                 )
                 # Use shorter TTL for real-time requests
                 ttl = CacheTTL.REAL_TIME if is_real_time else CacheTTL.LONG
-                await _cache_service.set_json(cache_key, graphql_trend.to_dict(), ttl)
+                # Serialize domain trend for caching
+                serialized_trend = _analytics_service._serialize_trend_analysis(domain_trend)
+                await _cache_service.set_json(cache_key, serialized_trend, ttl)
                 
                 if is_real_time:
                     _logger.debug(f"Cached trend analysis with real-time TTL ({CacheTTL.REAL_TIME}s)")
