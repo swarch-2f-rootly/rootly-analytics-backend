@@ -6,6 +6,7 @@ This service orchestrates the analytics calculations and data access.
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime, timedelta
 import pandas as pd
+import numpy as np
 import asyncio
 
 from ..ports.analytics_service import AnalyticsService
@@ -1142,7 +1143,7 @@ class AnalyticsServiceImpl(AnalyticsService):
             return 0.0
         
         skewness = np.sum(((values - mean) / std) ** 3) / n
-        return skewness
+        return float(skewness)
     
     def _calculate_kurtosis(self, values):
         """Calculate kurtosis of data distribution."""
@@ -1157,7 +1158,7 @@ class AnalyticsServiceImpl(AnalyticsService):
             return 0.0
         
         kurtosis = np.sum(((values - mean) / std) ** 4) / n - 3
-        return kurtosis
+        return float(kurtosis)
     
     def _detect_anomalies(self, values):
         """Detect anomalies using statistical methods."""
@@ -1174,8 +1175,8 @@ class AnalyticsServiceImpl(AnalyticsService):
         anomalies = values[(values < lower_bound) | (values > upper_bound)]
         
         return {
-            "anomalies_count": len(anomalies),
-            "anomaly_threshold": {"lower": lower_bound, "upper": upper_bound},
+            "anomalies_count": int(len(anomalies)),
+            "anomaly_threshold": {"lower": float(lower_bound), "upper": float(upper_bound)},
             "anomaly_percentage": round((len(anomalies) / len(values)) * 100, 2)
         }
     
@@ -1201,7 +1202,7 @@ class AnalyticsServiceImpl(AnalyticsService):
             "trend_slope": float(slope),
             "trend_direction": "increasing" if slope > 0 else "decreasing" if slope < 0 else "stable",
             "volatility": float(volatility),
-            "trend_strength": abs(slope) / (np.std(values) + 0.001)
+            "trend_strength": float(abs(slope) / (np.std(values) + 0.001))
         }
     
     def _detect_seasonality(self, values):
@@ -1214,9 +1215,9 @@ class AnalyticsServiceImpl(AnalyticsService):
         autocorr_24 = np.corrcoef(values[:-24], values[24:])[0, 1] if len(values) >= 48 else 0
         
         return {
-            "seasonality_detected": abs(autocorr_12) > 0.3 or abs(autocorr_24) > 0.3,
-            "12_hour_correlation": float(autocorr_12) if not np.isnan(autocorr_12) else 0,
-            "24_hour_correlation": float(autocorr_24) if not np.isnan(autocorr_24) else 0
+            "seasonality_detected": bool(abs(autocorr_12) > 0.3 or abs(autocorr_24) > 0.3),
+            "12_hour_correlation": float(autocorr_12) if not np.isnan(autocorr_12) else 0.0,
+            "24_hour_correlation": float(autocorr_24) if not np.isnan(autocorr_24) else 0.0
         }
     
     async def _calculate_cross_controller_correlations(self, controller_ids, metrics, all_measurements):

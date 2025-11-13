@@ -179,6 +179,16 @@ class CacheService(ABC):
         
         return computed_value
 
+    @abstractmethod
+    async def flush_db(self) -> bool:
+        """
+        Clear all keys in the current cache database. Use with caution!
+        
+        Returns:
+            True if successful, False otherwise
+        """
+        pass
+
 
 class CacheKeyPatterns:
     """Common cache key patterns for the analytics service."""

@@ -49,6 +49,25 @@ async def lifespan(app: FastAPI):
     app.state.analytics_service = analytics_service
     app.state.influx_repository = influx_repository
     
+    # Setup routes during startup
+    analytics_handlers = AnalyticsHandlers(app.state.analytics_service, app.state.cache_service)
+    
+    # Include REST API routes
+    app.include_router(analytics_handlers.router)
+    logger.info("REST API router configured successfully")
+    
+    # Setup and include GraphQL
+    graphql_router = create_graphql_router(
+        analytics_service=app.state.analytics_service,
+        influx_repository=app.state.influx_repository,
+        cache_service=app.state.cache_service,
+        playground_enabled=config.GRAPHQL_PLAYGROUND_ENABLED,
+        introspection_enabled=config.GRAPHQL_INTROSPECTION_ENABLED
+    )
+    app.include_router(graphql_router, prefix=config.GRAPHQL_ENDPOINT, tags=["GraphQL"])
+    
+    logger.info("GraphQL router configured successfully")
+    
     yield
 
     # Shutdown
@@ -135,25 +154,7 @@ async def get_analytics_service(
     )
 
 
-# Defer service setup to startup event since it requires async initialization
-@app.on_event("startup")
-async def startup_event():
-    """Initialize services on startup."""
-    # Services are already initialized in lifespan, now setup routes
-    analytics_handlers = AnalyticsHandlers(app.state.analytics_service)
-    
-    # Include REST API routes
-    app.include_router(analytics_handlers.router)
-    
-    # Setup and include GraphQL
-    graphql_router = create_graphql_router(
-        analytics_service=app.state.analytics_service,
-        influx_repository=app.state.influx_repository,
-        cache_service=app.state.cache_service,
-        playground_enabled=config.GRAPHQL_PLAYGROUND_ENABLED,
-        introspection_enabled=config.GRAPHQL_INTROSPECTION_ENABLED
-    )
-    app.include_router(graphql_router, prefix=config.GRAPHQL_ENDPOINT, tags=["GraphQL"])
+# Routes are now configured in lifespan startup
 
 # Register error handlers
 register_error_handlers(app)

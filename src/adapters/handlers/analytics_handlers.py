@@ -40,19 +40,25 @@ class AnalyticsHandlers:
     Implements the REST API interface defined in the project scope.
     """
 
-    def __init__(self, analytics_service: AnalyticsService):
+    def __init__(self, analytics_service: AnalyticsService, cache_service=None):
         """
         Initialize handlers with analytics service dependency.
         
         Args:
             analytics_service: Implementation of the AnalyticsService port
+            cache_service: Cache service for cache management operations (optional)
         """
         self.analytics_service = analytics_service
+        self.cache_service = cache_service
         self.logger = logging.getLogger(__name__)
         
         # Create FastAPI router
         self.router = APIRouter(prefix="/api/v1/analytics", tags=["analytics"])
         self._setup_routes()
+        
+        # Log registered routes
+        route_count = len(self.router.routes)
+        self.logger.info(f"Analytics router initialized with {route_count} routes")
 
     def _setup_routes(self):
         """Setup FastAPI routes."""
@@ -255,6 +261,15 @@ class AnalyticsHandlers:
                         "timestamp": str(datetime.now().isoformat())
                     }
                 )
+
+        @self.router.post(
+            "/cache/clear",
+            summary="Clear Analytics Cache",
+            description="Clear all cached analytics data from Redis. Useful for testing and debugging cache behavior."
+        )
+        async def clear_cache_endpoint():
+            """Clear all cached data."""
+            return await self.clear_cache()
 
     async def _handle_single_metric_report(
         self,
@@ -723,5 +738,64 @@ class AnalyticsHandlers:
                 detail={
                     "error": "Internal server error",
                     "message": "An unexpected error occurred while retrieving latest measurement"
+                }
+            )
+    
+    async def clear_cache(self):
+        """
+        Clear all cached data from Redis.
+        This endpoint is useful for testing and debugging cache behavior.
+        
+        Returns:
+            dict: Confirmation message with operation status
+            
+        Raises:
+            HTTPException: If cache clearing fails or cache service unavailable
+        """
+        self.logger.info("Cache clear operation requested")
+        
+        try:
+            if self.cache_service is None:
+                self.logger.warning("Cache clear requested but cache service not available")
+                raise HTTPException(
+                    status_code=503,
+                    detail={
+                        "error": "Cache service unavailable",
+                        "message": "Cache service is not configured or disabled"
+                    }
+                )
+            
+            # Clear all cache data
+            cleared = await self.cache_service.flush_db()
+            self.logger.info(f"Cache flush_db result: {cleared}")
+            
+            if cleared:
+                self.logger.info("Cache cleared successfully")
+                return {
+                    "status": "success",
+                    "message": "All cached data has been cleared",
+                    "timestamp": datetime.now().isoformat(),
+                    "operation": "cache_clear"
+                }
+            else:
+                self.logger.warning("Cache clear operation returned False")
+                raise HTTPException(
+                    status_code=500,
+                    detail={
+                        "error": "Cache clear failed",
+                        "message": "Cache clear operation did not complete successfully"
+                    }
+                )
+                
+        except HTTPException:
+            # Re-raise HTTP exceptions
+            raise
+        except Exception as e:
+            self.logger.error(f"Unexpected error clearing cache: {e}")
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "error": "Internal server error",
+                    "message": f"An unexpected error occurred while clearing cache: {str(e)}"
                 }
             )
